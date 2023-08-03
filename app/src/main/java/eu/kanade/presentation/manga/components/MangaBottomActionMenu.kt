@@ -353,7 +353,7 @@ fun FailedUpdatesBottomActionMenu(
                     onClick = onDeleteClicked,
                 )
                 Button(
-                    title = "Dismiss",
+                    title = stringResource(R.string.action_dismiss),
                     icon = Icons.Outlined.VisibilityOff,
                     toConfirm = confirm[1],
                     onLongClick = { onLongClickItem(1) },

@@ -81,6 +81,7 @@
     <string name="action_bookmark">Bookmark chapter</string>
     <string name="action_remove_bookmark">Unbookmark chapter</string>
     <string name="action_delete">Delete</string>
+    <string name="action_dismiss">Dismiss</string>
     <string name="action_update_library">Update library</string>
     <string name="action_update_warning">Update warning</string>
     <string name="action_enable_all">Enable all</string>

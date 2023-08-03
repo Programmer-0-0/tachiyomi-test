@@ -910,7 +910,7 @@
 
     <!-- Information Text -->
     <string name="information_no_downloads">No downloads</string>
-    <string name="information_no_errors">No errors found</string>
+    <string name="information_no_update_errors">All entries updated successfully</string>
     <string name="information_no_recent">No recent updates</string>
     <string name="information_no_recent_manga">Nothing read recently</string>
     <string name="information_empty_library">Your library is empty</string>

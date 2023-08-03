@@ -7,6 +7,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.FlipToBack
 import androidx.compose.material.icons.outlined.Refresh
 import androidx.compose.material.icons.outlined.SelectAll
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.TopAppBarScrollBehavior
@@ -47,6 +49,7 @@ fun UpdateScreen(
     onSelectAll: (Boolean) -> Unit,
     onInvertSelection: () -> Unit,
     onUpdateLibrary: () -> Boolean,
+    onUpdateWarning: () -> Unit,
     onDownloadChapter: (List<UpdatesItem>, ChapterDownloadAction) -> Unit,
     onMultiBookmarkClicked: (List<UpdatesItem>, bookmark: Boolean) -> Unit,
     onMultiMarkAsReadClicked: (List<UpdatesItem>, read: Boolean) -> Unit,
@@ -62,6 +65,7 @@ fun UpdateScreen(
         topBar = { scrollBehavior ->
             UpdatesAppBar(
                 onUpdateLibrary = { onUpdateLibrary() },
+                onUpdateWarning = onUpdateWarning,
                 actionModeCounter = state.selected.size,
                 onSelectAll = { onSelectAll(true) },
                 onInvertSelection = { onInvertSelection() },
@@ -127,10 +131,13 @@ fun UpdateScreen(
     }
 }
 
+private val warningIconEnabled = mutableStateOf(false)
+
 @Composable
 private fun UpdatesAppBar(
     modifier: Modifier = Modifier,
     onUpdateLibrary: () -> Unit,
+    onUpdateWarning: () -> Unit,
     // For action mode
     actionModeCounter: Int,
     onSelectAll: () -> Unit,
@@ -138,19 +145,26 @@ private fun UpdatesAppBar(
     onCancelActionMode: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
 ) {
+    val warningIconTint = MaterialTheme.colorScheme.error
     AppBar(
         modifier = modifier,
         title = stringResource(R.string.label_recent_updates),
         actions = {
-            AppBarActions(
-                listOf(
-                    AppBar.Action(
-                        title = stringResource(R.string.action_update_library),
-                        icon = Icons.Outlined.Refresh,
-                        onClick = onUpdateLibrary,
-                    ),
-                ),
+            val actions = mutableListOf<AppBar.Action>()
+            if (warningIconEnabled.value) { // only add the warning icon if it is enabled
+                actions += AppBar.Action(
+                    title = "Update Warning",
+                    icon = Icons.Rounded.Warning,
+                    onClick = onUpdateWarning,
+                    iconTint = warningIconTint,
+                )
+            }
+            actions += AppBar.Action(
+                title = stringResource(R.string.action_update_library),
+                icon = Icons.Outlined.Refresh,
+                onClick = onUpdateLibrary,
             )
+            AppBarActions(actions)
         },
         actionModeCounter = actionModeCounter,
         onCancelActionMode = onCancelActionMode,
@@ -211,4 +225,8 @@ private fun UpdatesBottomBar(
 sealed interface UpdatesUiModel {
     data class Header(val date: String) : UpdatesUiModel
     data class Item(val item: UpdatesItem) : UpdatesUiModel
+}
+
+fun setWarningIconEnabled(enabled: Boolean) {
+    warningIconEnabled.value = enabled
 }

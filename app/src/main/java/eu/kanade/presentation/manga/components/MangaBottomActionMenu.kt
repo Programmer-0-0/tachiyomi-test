@@ -30,6 +30,7 @@ import androidx.compose.material.icons.outlined.DoneAll
 import androidx.compose.material.icons.outlined.Download
 import androidx.compose.material.icons.outlined.Label
 import androidx.compose.material.icons.outlined.RemoveDone
+import androidx.compose.material.icons.outlined.VisibilityOff
 import androidx.compose.material.ripple.rememberRipple
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -300,6 +301,63 @@ fun LibraryBottomActionMenu(
                     toConfirm = confirm[4],
                     onLongClick = { onLongClickItem(4) },
                     onClick = onDeleteClicked,
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun FailedUpdatesBottomActionMenu(
+    visible: Boolean,
+    modifier: Modifier = Modifier,
+    onDeleteClicked: () -> Unit,
+    onDismissClicked: () -> Unit,
+) {
+    AnimatedVisibility(
+        visible = visible,
+        enter = expandVertically(animationSpec = tween(delayMillis = 300)),
+        exit = shrinkVertically(animationSpec = tween()),
+    ) {
+        val scope = rememberCoroutineScope()
+        Surface(
+            modifier = modifier,
+            shape = MaterialTheme.shapes.large.copy(bottomEnd = ZeroCornerSize, bottomStart = ZeroCornerSize),
+            tonalElevation = 3.dp,
+        ) {
+            val haptic = LocalHapticFeedback.current
+            val confirm = remember { mutableStateListOf(false, false) }
+            var resetJob: Job? = remember { null }
+            val onLongClickItem: (Int) -> Unit = { toConfirmIndex ->
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                (0..<2).forEach { i -> confirm[i] = i == toConfirmIndex }
+                resetJob?.cancel()
+                resetJob = scope.launch {
+                    delay(1.seconds)
+                    if (isActive) confirm[toConfirmIndex] = false
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .windowInsetsPadding(
+                        WindowInsets.navigationBars
+                            .only(WindowInsetsSides.Bottom),
+                    )
+                    .padding(horizontal = 8.dp, vertical = 12.dp),
+            ) {
+                Button(
+                    title = stringResource(R.string.action_delete),
+                    icon = Icons.Outlined.Delete,
+                    toConfirm = confirm[0],
+                    onLongClick = { onLongClickItem(0) },
+                    onClick = onDeleteClicked,
+                )
+                Button(
+                    title = "Dismiss",
+                    icon = Icons.Outlined.VisibilityOff,
+                    toConfirm = confirm[1],
+                    onLongClick = { onLongClickItem(1) },
+                    onClick = onDismissClicked,
                 )
             }
         }

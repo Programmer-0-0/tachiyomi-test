@@ -21,6 +21,7 @@ import eu.kanade.domain.manga.model.copyFrom
 import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.domain.track.model.toDomainTrack
+import eu.kanade.presentation.updates.setWarningIconEnabled
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
@@ -319,6 +320,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         }
 
         if (failedUpdates.isNotEmpty()) {
+            newFailedUpdates = failedUpdates
+            setWarningIconEnabled(true)
             val errorFile = writeErrorFile(failedUpdates)
             notifier.showUpdateErrorNotification(
                 failedUpdates.size,
@@ -549,6 +552,16 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
          * Key that defines what should be updated.
          */
         private const val KEY_TARGET = "target"
+
+        private var newFailedUpdates: List<Pair<Manga, String?>> = emptyList()
+
+        fun getNewFailedUpdates(): List<Pair<Manga, String?>> {
+            return newFailedUpdates
+        }
+
+        fun setNewFailedUpdates(set: HashSet<Long>) {
+            newFailedUpdates = newFailedUpdates.filterNot { it.first.id in set }
+        }
 
         fun cancelAllWorks(context: Context) {
             context.workManager.cancelAllWorkByTag(TAG)

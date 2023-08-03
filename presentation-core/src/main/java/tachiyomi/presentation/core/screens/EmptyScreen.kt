@@ -36,8 +36,10 @@ fun EmptyScreen(
     @StringRes textResource: Int,
     modifier: Modifier = Modifier,
     actions: List<EmptyScreenAction>? = null,
+    selector: Int = 1,
 ) {
     EmptyScreen(
+        selector = selector,
         message = stringResource(textResource),
         modifier = modifier,
         actions = actions,
@@ -49,8 +51,9 @@ fun EmptyScreen(
     message: String,
     modifier: Modifier = Modifier,
     actions: List<EmptyScreenAction>? = null,
+    selector: Int = 1,
 ) {
-    val face = remember { getRandomErrorFace() }
+    val face = remember { getRandomFace(selector) }
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -101,7 +104,18 @@ private val ERROR_FACES = listOf(
     "(；￣Д￣)",
     "(･Д･。",
 )
-
-private fun getRandomErrorFace(): String {
-    return ERROR_FACES[Random.nextInt(ERROR_FACES.size)]
+private val HAPPY_FACES = listOf(
+    "ヽ(＾Д＾)ﾉ",
+    "≧◡≦",
+    "＾ω＾",
+    "＾▽＾",
+    "(◕‿◕)",
+    "◠‿◠",
+)
+private fun getRandomFace(selector: Int): String {
+    if (selector == 1) {
+        return ERROR_FACES[Random.nextInt(ERROR_FACES.size)]
+    } else {
+        return HAPPY_FACES[Random.nextInt(HAPPY_FACES.size)]
+    }
 }

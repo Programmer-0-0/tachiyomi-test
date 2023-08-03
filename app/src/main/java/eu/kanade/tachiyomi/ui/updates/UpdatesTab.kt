@@ -18,6 +18,7 @@ import cafe.adriel.voyager.navigator.tab.LocalTabNavigator
 import cafe.adriel.voyager.navigator.tab.TabOptions
 import eu.kanade.presentation.updates.UpdateScreen
 import eu.kanade.presentation.updates.UpdatesDeleteConfirmationDialog
+import eu.kanade.presentation.updates.failed.FailedUpdatesScreen
 import eu.kanade.presentation.util.Tab
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.download.DownloadQueueScreen
@@ -61,6 +62,7 @@ object UpdatesTab : Tab {
             onSelectAll = screenModel::toggleAllSelection,
             onInvertSelection = screenModel::invertSelection,
             onUpdateLibrary = screenModel::updateLibrary,
+            onUpdateWarning = { navigator.push(FailedUpdatesScreen()) },
             onDownloadChapter = screenModel::downloadChapters,
             onMultiBookmarkClicked = screenModel::bookmarkUpdates,
             onMultiMarkAsReadClicked = screenModel::markUpdatesRead,

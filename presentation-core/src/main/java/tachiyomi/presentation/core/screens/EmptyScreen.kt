@@ -51,7 +51,7 @@ fun EmptyScreen(
     message: String,
     modifier: Modifier = Modifier,
     actions: List<EmptyScreenAction>? = null,
-    selector: Int = 1,
+    happyFace: Boolean = false,
 ) {
     val face = remember { getRandomFace(selector) }
     Column(

@@ -36,7 +36,7 @@ fun EmptyScreen(
     @StringRes textResource: Int,
     modifier: Modifier = Modifier,
     actions: List<EmptyScreenAction>? = null,
-    selector: Int = 1,
+    happyFace: Boolean = false,
 ) {
     EmptyScreen(
         selector = selector,

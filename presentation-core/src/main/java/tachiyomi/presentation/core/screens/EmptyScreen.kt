@@ -53,7 +53,7 @@ fun EmptyScreen(
     actions: List<EmptyScreenAction>? = null,
     happyFace: Boolean = false,
 ) {
-    val face = remember { getRandomFace(selector) }
+    val face = remember { getRandomFace(happyFace) }
     Column(
         modifier = modifier
             .fillMaxSize()

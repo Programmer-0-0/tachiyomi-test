@@ -77,7 +77,7 @@ class FailedUpdatesScreen : Screen() {
 
         Scaffold(
             topBar = { scrollBehavior ->
-                DownloadStatsAppBar(
+                FailedUpdatesAppBar(
                     groupByMode = state.groupByMode,
                     items = state.items,
                     selected = state.selected,
@@ -118,7 +118,7 @@ class FailedUpdatesScreen : Screen() {
                         GroupByMode.NONE -> FastScrollLazyColumn(
                             contentPadding = contentPadding,
                         ) {
-                            downloadStatUiItems(
+                            failedUpdatesUiItems(
                                 items = state.items,
                                 selectionMode = state.selectionMode,
                                 onClick = { item ->
@@ -224,7 +224,7 @@ class FailedUpdatesScreen : Screen() {
 }
 
 @Composable
-private fun DownloadStatsAppBar(
+private fun FailedUpdatesAppBar(
     groupByMode: GroupByMode,
     items: List<FailedUpdatesManga>,
     modifier: Modifier = Modifier,
@@ -244,7 +244,7 @@ private fun DownloadStatsAppBar(
     errorCount: Int,
 ) {
     if (selected.isNotEmpty()) {
-        DownloadStatsActionAppBar(
+        FailedUpdatesActionAppBar(
             modifier = modifier,
             onSelectAll = onSelectAll,
             onInvertSelection = onInvertSelection,
@@ -376,7 +376,7 @@ private fun DownloadStatsAppBar(
 }
 
 @Composable
-private fun DownloadStatsActionAppBar(
+private fun FailedUpdatesActionAppBar(
     modifier: Modifier = Modifier,
     actionModeCounter: Int,
     onSelectAll: () -> Unit,

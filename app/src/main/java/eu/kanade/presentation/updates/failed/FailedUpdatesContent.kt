@@ -64,7 +64,7 @@ import tachiyomi.presentation.core.util.selectedBackground
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
 
-fun LazyListScope.downloadStatUiItems(
+fun LazyListScope.failedUpdatesUiItems(
     items: List<FailedUpdatesManga>,
     selectionMode: Boolean,
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
@@ -76,7 +76,7 @@ fun LazyListScope.downloadStatUiItems(
         key = { it.libraryManga.manga.id },
     ) { item ->
         Box(modifier = Modifier.animateItemPlacement(animationSpec = tween(300))) {
-            DownloadStatUiItem(
+            FailedUpdatesUiItem(
                 modifier = Modifier,
                 selected = item.selected,
                 onLongClick = {
@@ -96,7 +96,7 @@ fun LazyListScope.downloadStatUiItems(
 }
 
 @Composable
-private fun DownloadStatUiItem(
+private fun FailedUpdatesUiItem(
     modifier: Modifier,
     manga: FailedUpdatesManga,
     selected: Boolean,
@@ -168,7 +168,7 @@ fun returnSourceIcon(id: Long): ImageBitmap? {
         ?.asImageBitmap()
 }
 
-fun LazyListScope.downloadStatGroupUiItem(
+fun LazyListScope.failedUpdatesGroupUiItem(
     items: List<FailedUpdatesManga>,
     selectionMode: Boolean,
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
@@ -310,7 +310,7 @@ fun LazyListScope.downloadStatGroupUiItem(
             modifier = Modifier.animateItemPlacement(),
             visible = expanded[id] == true,
         ) {
-            DownloadStatUiItem(
+            FailedUpdatesUiItem(
                 modifier = Modifier,
                 selected = item.selected,
                 onLongClick = {
@@ -369,7 +369,7 @@ fun CategoryList(
 ) {
     FastScrollLazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxHeight()) {
         categoryMap.forEach { (category, items) ->
-            downloadStatGroupUiItem(
+            failedUpdatesGroupUiItem(
                 id = category,
                 items = items,
                 selectionMode = selectionMode,

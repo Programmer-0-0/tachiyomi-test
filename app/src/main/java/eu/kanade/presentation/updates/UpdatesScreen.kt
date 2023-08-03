@@ -153,7 +153,7 @@ private fun UpdatesAppBar(
             val actions = mutableListOf<AppBar.Action>()
             if (warningIconEnabled.value) { // only add the warning icon if it is enabled
                 actions += AppBar.Action(
-                    title = "Update Warning",
+                    title = stringResource(R.string.action_update_warning),
                     icon = Icons.Rounded.Warning,
                     onClick = onUpdateWarning,
                     iconTint = warningIconTint,

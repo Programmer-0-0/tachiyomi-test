@@ -108,9 +108,9 @@ class FailedUpdatesScreen : Screen() {
                 state.isLoading -> LoadingScreen(modifier = Modifier.padding(contentPadding))
 
                 state.items.isEmpty() -> EmptyScreen(
-                    textResource = R.string.information_no_errors,
+                    textResource = R.string.information_no_update_errors,
                     modifier = Modifier.padding(contentPadding),
-                    selector = 2,
+                    happyFace = true,
                 )
 
                 else -> {

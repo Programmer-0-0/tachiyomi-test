@@ -39,10 +39,10 @@ fun EmptyScreen(
     happyFace: Boolean = false,
 ) {
     EmptyScreen(
-        selector = selector,
         message = stringResource(textResource),
         modifier = modifier,
         actions = actions,
+        happyFace = happyFace,
     )
 }
 

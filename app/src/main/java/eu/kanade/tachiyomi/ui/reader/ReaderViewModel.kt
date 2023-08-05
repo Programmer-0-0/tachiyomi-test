@@ -54,6 +54,7 @@ import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.runBlocking
 import logcat.LogPriority
+import tachiyomi.core.preference.toggle
 import tachiyomi.core.util.lang.launchIO
 import tachiyomi.core.util.lang.launchNonCancellable
 import tachiyomi.core.util.lang.withIOContext
@@ -661,6 +662,15 @@ class ReaderViewModel(
         }
     }
 
+    fun toggleCropBorders(): Boolean {
+        val isPagerType = ReadingModeType.isPagerType(getMangaReadingMode())
+        return if (isPagerType) {
+            readerPreferences.cropBorders().toggle()
+        } else {
+            readerPreferences.cropBordersWebtoon().toggle()
+        }
+    }
+
     /**
      * Generate a filename for the given [manga] and [page]
      */
@@ -681,6 +691,14 @@ class ReaderViewModel(
 
     fun showLoadingDialog() {
         mutableState.update { it.copy(dialog = Dialog.Loading) }
+    }
+
+    fun openReadingModeSelectDialog() {
+        mutableState.update { it.copy(dialog = Dialog.ReadingModeSelect) }
+    }
+
+    fun openOrientationModeSelectDialog() {
+        mutableState.update { it.copy(dialog = Dialog.OrientationModeSelect) }
     }
 
     fun openPageDialog(page: ReaderPage) {
@@ -863,6 +881,8 @@ class ReaderViewModel(
     sealed interface Dialog {
         data object Loading : Dialog
         data object Settings : Dialog
+        data object ReadingModeSelect : Dialog
+        data object OrientationModeSelect : Dialog
         data class PageActions(val page: ReaderPage) : Dialog
     }
 

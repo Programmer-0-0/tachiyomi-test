@@ -56,7 +56,7 @@ fun UpdateScreen(
     onMultiDeleteClicked: (List<UpdatesItem>) -> Unit,
     onUpdateSelected: (UpdatesItem, Boolean, Boolean, Boolean) -> Unit,
     onOpenChapter: (UpdatesItem) -> Unit,
-    warningIconState: Boolean,
+    hasFailedUpdates: Boolean,
 ) {
     BackHandler(enabled = state.selectionMode, onBack = { onSelectAll(false) })
 
@@ -72,7 +72,7 @@ fun UpdateScreen(
                 onInvertSelection = { onInvertSelection() },
                 onCancelActionMode = { onSelectAll(false) },
                 scrollBehavior = scrollBehavior,
-                warningIconState = warningIconState,
+                hasFailedUpdates = hasFailedUpdates,
             )
         },
         bottomBar = {
@@ -144,7 +144,7 @@ private fun UpdatesAppBar(
     onInvertSelection: () -> Unit,
     onCancelActionMode: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
-    warningIconState: Boolean,
+    hasFailedUpdates: Boolean,
 ) {
     val warningIconTint = MaterialTheme.colorScheme.error
     AppBar(
@@ -152,7 +152,7 @@ private fun UpdatesAppBar(
         title = stringResource(R.string.label_recent_updates),
         actions = {
             val actions = mutableListOf<AppBar.Action>()
-            if (warningIconState) { // only add the warning icon if it is enabled
+            if (hasFailedUpdates) { // only add the warning icon if it is enabled
                 actions += AppBar.Action(
                     title = stringResource(R.string.action_update_warning),
                     icon = Icons.Rounded.Warning,

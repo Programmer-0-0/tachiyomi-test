@@ -27,7 +27,6 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -85,23 +84,20 @@ class UpdatesScreenModel(
                 getUpdates.subscribe(calendar).distinctUntilChanged(),
                 downloadCache.changes,
                 downloadManager.queueState,
-            ) { updates, _, _ -> updates }
+                failedUpdatesManager.hasFailedUpdates(),
+            ) { updates, _, _, iconState -> updates to iconState }
                 .catch {
                     logcat(LogPriority.ERROR, it)
                     _events.send(Event.InternalError)
                 }
-                .collectLatest { updates ->
-                    failedUpdatesManager.getFailedUpdatesCount()
-                        .map { it > 0L }
-                        .collectLatest { iconState ->
-                            mutableState.update { state ->
-                                state.copy(
-                                    isLoading = false,
-                                    items = updates.toUpdateItems(),
-                                    warningIconState = iconState,
-                                )
-                            }
-                        }
+                .collectLatest { (updates, iconState) ->
+                    mutableState.update { state ->
+                        state.copy(
+                            isLoading = false,
+                            items = updates.toUpdateItems(),
+                            hasFailedUpdates = iconState,
+                        )
+                    }
                 }
         }
 

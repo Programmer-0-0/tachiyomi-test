@@ -1,21 +1,22 @@
 package tachiyomi.data.failed
 
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import logcat.LogPriority
 import tachiyomi.core.util.system.logcat
 import tachiyomi.data.DatabaseHandler
 import tachiyomi.domain.failed.model.FailedUpdate
 import tachiyomi.domain.failed.repository.FailedUpdatesRepository
-import tachiyomi.domain.manga.model.Manga
 
 class FailedUpdatesRepositoryImpl(
     private val handler: DatabaseHandler,
 ) : FailedUpdatesRepository {
-    override suspend fun getFailedUpdates(): Flow<List<FailedUpdate>> {
+    override fun getFailedUpdates(): Flow<List<FailedUpdate>> {
         return handler.subscribeToList { failed_updatesQueries.getFailedUpdates(failedUpdatesMapper) }
     }
 
-    override fun getFailedUpdatesCount(): Flow<Boolean> {
+    override fun hasFailedUpdates(): Flow<Boolean> {
         return handler
             .subscribeToOne { failed_updatesQueries.getFailedUpdatesCount() }
             .map { it > 0 }
@@ -37,8 +38,8 @@ class FailedUpdatesRepositoryImpl(
             logcat(LogPriority.ERROR, e)
         }
     }
-    
-    override suspend fun insert(mangaId: Long, errorMessage: String?) {
+
+    override suspend fun insert(mangaId: Long, errorMessage: String) {
         handler.await(inTransaction = true) {
             failed_updatesQueries.insert(
                 mangaId = mangaId,

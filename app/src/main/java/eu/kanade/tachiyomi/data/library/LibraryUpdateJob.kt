@@ -288,10 +288,10 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                     is NoChaptersException -> context.getString(R.string.no_chapters_error)
                                                     // failedUpdates will already have the source, don't need to copy it into the message
                                                     is SourceNotInstalledException -> context.getString(R.string.loader_not_implemented_error)
-                                                    else -> e.message
+                                                    else -> e.message ?: "Null"
                                                 }
                                                 try {
-                                                    failedUpdatesManager.insert(manga, errorMessage)
+                                                    failedUpdatesManager.insert(manga.id, errorMessage)
                                                 } catch (e: Exception) {
                                                     logcat(LogPriority.ERROR, e)
                                                 }

@@ -34,10 +34,10 @@ class FailedUpdatesRepositoryImpl(
             logcat(LogPriority.ERROR, e)
         }
     }
-    override suspend fun insert(manga: Manga, errorMessage: String?) {
+    override suspend fun insert(mangaId: Long, errorMessage: String?) {
         handler.await(inTransaction = true) {
             failed_updatesQueries.insert(
-                mangaId = manga.id,
+                mangaId = mangaId,
                 errorMessage = errorMessage,
             )
         }

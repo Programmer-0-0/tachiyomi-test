@@ -15,8 +15,11 @@ class FailedUpdatesRepositoryImpl(
         return handler.subscribeToList { failed_updatesQueries.getFailedUpdates(failedUpdatesMapper) }
     }
 
-    override fun getFailedUpdatesCount(): Flow<Long> {
-        return handler.subscribeToOne { failed_updatesQueries.getFailedUpdatesCount() }
+    override fun getFailedUpdatesCount(): Flow<Boolean> {
+        return handler
+            .subscribeToOne { failed_updatesQueries.getFailedUpdatesCount() }
+            .map { it > 0 }
+            .distinctUntilChanged()
     }
 
     override suspend fun removeFailedUpdatesByMangaIds(mangaIds: List<Long>) {

@@ -56,6 +56,7 @@ fun UpdateScreen(
     onMultiDeleteClicked: (List<UpdatesItem>) -> Unit,
     onUpdateSelected: (UpdatesItem, Boolean, Boolean, Boolean) -> Unit,
     onOpenChapter: (UpdatesItem) -> Unit,
+    warningIconState: Boolean,
 ) {
     BackHandler(enabled = state.selectionMode, onBack = { onSelectAll(false) })
 
@@ -71,6 +72,7 @@ fun UpdateScreen(
                 onInvertSelection = { onInvertSelection() },
                 onCancelActionMode = { onSelectAll(false) },
                 scrollBehavior = scrollBehavior,
+                warningIconState = warningIconState,
             )
         },
         bottomBar = {
@@ -131,8 +133,6 @@ fun UpdateScreen(
     }
 }
 
-private val warningIconEnabled = mutableStateOf(false)
-
 @Composable
 private fun UpdatesAppBar(
     modifier: Modifier = Modifier,
@@ -144,6 +144,7 @@ private fun UpdatesAppBar(
     onInvertSelection: () -> Unit,
     onCancelActionMode: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
+    warningIconState: Boolean,
 ) {
     val warningIconTint = MaterialTheme.colorScheme.error
     AppBar(
@@ -151,7 +152,7 @@ private fun UpdatesAppBar(
         title = stringResource(R.string.label_recent_updates),
         actions = {
             val actions = mutableListOf<AppBar.Action>()
-            if (warningIconEnabled.value) { // only add the warning icon if it is enabled
+            if (warningIconState) { // only add the warning icon if it is enabled
                 actions += AppBar.Action(
                     title = stringResource(R.string.action_update_warning),
                     icon = Icons.Rounded.Warning,
@@ -225,8 +226,4 @@ private fun UpdatesBottomBar(
 sealed interface UpdatesUiModel {
     data class Header(val date: String) : UpdatesUiModel
     data class Item(val item: UpdatesItem) : UpdatesUiModel
-}
-
-fun setWarningIconEnabled(enabled: Boolean) {
-    warningIconEnabled.value = enabled
 }

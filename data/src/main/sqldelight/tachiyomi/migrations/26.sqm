@@ -1,0 +1,8 @@
+CREATE TABLE IF NOT EXISTS failed_updates (
+    manga_id INTEGER NOT NULL,
+    error_message TEXT,
+    FOREIGN KEY(manga_id) REFERENCES mangas (_id)
+    ON DELETE CASCADE
+);
+
+CREATE INDEX IF NOT EXISTS idx_failed_updates ON failed_updates (manga_id);

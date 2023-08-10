@@ -114,6 +114,6 @@ private val HAPPY_FACES = listOf(
 )
 private fun getRandomFace(happyFace: Boolean): String {
     val faces = if (happyFace) HAPPY_FACES else ERROR_FACES
-    
+
     return faces[Random.nextInt(faces.size)]
 }

@@ -42,7 +42,6 @@ import eu.kanade.presentation.components.DropdownMenu
 import eu.kanade.presentation.components.NestedMenuItem
 import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.manga.components.FailedUpdatesBottomActionMenu
-import eu.kanade.presentation.updates.setWarningIconEnabled
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.ui.browse.migration.search.MigrateSearchScreen
@@ -57,7 +56,6 @@ import tachiyomi.presentation.core.screens.LoadingScreen
 import tachiyomi.source.local.isLocal
 
 class FailedUpdatesScreen : Screen() {
-
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
@@ -65,15 +63,12 @@ class FailedUpdatesScreen : Screen() {
         val screenModel = rememberScreenModel { FailedUpdatesScreenModel() }
         val state by screenModel.state.collectAsState()
 
-        val categoryExpandedMapSaver: Saver<MutableMap<String, Boolean>, *> = Saver(
+        val categoryExpandedMapSaver: Saver<MutableMap<Pair<String, String?>, Boolean>, *> = Saver(
             save = { map -> map.toMap() },
             restore = { map -> mutableStateMapOf(*map.toList().toTypedArray()) },
         )
-        var expanded = emptyMap<String, Boolean>().toMutableMap()
 
-        if (screenModel.failedUpdates.isEmpty()) {
-            setWarningIconEnabled(false)
-        }
+        var expanded = emptyMap<Pair<String, String?>, Boolean>().toMutableMap()
 
         Scaffold(
             topBar = { scrollBehavior ->
@@ -132,6 +127,7 @@ class FailedUpdatesScreen : Screen() {
                                         MigrateSearchScreen(item.libraryManga.manga.id),
                                     )
                                 },
+                                isUngrouped = true,
                             )
                         }
 
@@ -145,7 +141,18 @@ class FailedUpdatesScreen : Screen() {
                             expanded = rememberSaveable(
                                 saver = categoryExpandedMapSaver,
                                 key = "CategoryExpandedMap",
-                                init = { mutableStateMapOf(*categoryMap.keys.toList().map { it to false }.toTypedArray()) },
+                                init = {
+                                    mutableStateMapOf(
+                                        *categoryMap.keys.flatMap { category ->
+                                            listOf(Pair(category, null) to false)
+                                        }.toTypedArray(),
+                                        *categoryMap.flatMap { entry ->
+                                            entry.value.keys.map { errorMessage ->
+                                                Pair(entry.key, errorMessage) to false
+                                            }
+                                        }.toTypedArray(),
+                                    )
+                                },
                             )
                             CategoryList(
                                 contentPadding = contentPadding,
@@ -161,7 +168,9 @@ class FailedUpdatesScreen : Screen() {
                                     )
                                 },
                                 onGroupSelected = screenModel::groupSelection,
-                                onSelected = screenModel::toggleSelection,
+                                onSelected = { item, selected, userSelected, fromLongPress ->
+                                    screenModel.toggleSelection(item, selected, userSelected, fromLongPress, true)
+                                },
                                 categoryMap = categoryMap,
                                 isSourceOrCategory = 1,
                                 expanded = expanded,
@@ -179,7 +188,18 @@ class FailedUpdatesScreen : Screen() {
                             expanded = rememberSaveable(
                                 saver = categoryExpandedMapSaver,
                                 key = "CategoryExpandedMap",
-                                init = { mutableStateMapOf(*categoryMap.keys.toList().map { it to false }.toTypedArray()) },
+                                init = {
+                                    mutableStateMapOf(
+                                        *categoryMap.keys.flatMap { category ->
+                                            listOf(Pair(category, null) to false)
+                                        }.toTypedArray(),
+                                        *categoryMap.flatMap { entry ->
+                                            entry.value.keys.map { errorMessage ->
+                                                Pair(entry.key, errorMessage) to false
+                                            }
+                                        }.toTypedArray(),
+                                    )
+                                },
                             )
                             CategoryList(
                                 contentPadding = contentPadding,
@@ -195,7 +215,9 @@ class FailedUpdatesScreen : Screen() {
                                     )
                                 },
                                 onGroupSelected = screenModel::groupSelection,
-                                onSelected = screenModel::toggleSelection,
+                                onSelected = { item, selected, userSelected, fromLongPress ->
+                                    screenModel.toggleSelection(item, selected, userSelected, fromLongPress, true)
+                                },
                                 categoryMap = categoryMap,
                                 isSourceOrCategory = 2,
                                 expanded = expanded,

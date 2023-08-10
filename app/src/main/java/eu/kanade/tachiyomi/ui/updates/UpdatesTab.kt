@@ -72,6 +72,7 @@ object UpdatesTab : Tab {
                 val intent = ReaderActivity.newIntent(context, it.update.mangaId, it.update.chapterId)
                 context.startActivity(intent)
             },
+            warningIconState = state.warningIconState,
         )
 
         val onDismissDialog = { screenModel.setDialog(null) }

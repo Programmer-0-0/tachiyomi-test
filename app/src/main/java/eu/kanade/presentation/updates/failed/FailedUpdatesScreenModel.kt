@@ -11,12 +11,12 @@ import eu.kanade.domain.source.interactor.GetSourcesWithFavoriteCount
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
-import eu.kanade.tachiyomi.data.library.LibraryUpdateJob
 import eu.kanade.tachiyomi.source.online.HttpSource
 import eu.kanade.tachiyomi.util.removeCovers
 import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
 import logcat.LogPriority
@@ -27,6 +27,7 @@ import tachiyomi.core.util.lang.launchNonCancellable
 import tachiyomi.core.util.system.logcat
 import tachiyomi.domain.category.interactor.GetCategories
 import tachiyomi.domain.category.model.Category
+import tachiyomi.domain.failed.repository.FailedUpdatesRepository
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.manga.interactor.GetLibraryManga
 import tachiyomi.domain.manga.model.Manga
@@ -46,40 +47,49 @@ class FailedUpdatesScreenModel(
     private val getCategories: GetCategories = Injekt.get(),
     private val getSourcesWithFavoriteCount: GetSourcesWithFavoriteCount = Injekt.get(),
     private val preferenceStore: PreferenceStore = Injekt.get(),
+    private val failedUpdatesManager: FailedUpdatesRepository = Injekt.get(),
 ) : StateScreenModel<FailedUpdatesScreenState>(FailedUpdatesScreenState()) {
-
-    var failedUpdates = LibraryUpdateJob.getNewFailedUpdates()
     private val selectedPositions: Array<Int> = arrayOf(-1, -1)
     private val selectedMangaIds: HashSet<Long> = HashSet()
     private val _channel = Channel<Event>(Int.MAX_VALUE)
     val channel = _channel.receiveAsFlow()
 
+//    private var failedUpdatesUI = emptyList<FailedUpdate>()
+
     init {
         coroutineScope.launchIO {
             val sortMode = preferenceStore.getEnum("sort_mode", SortingMode.BY_ALPHABET).get()
-            getSourcesWithFavoriteCount.subscribe()
+            combine(
+                getSourcesWithFavoriteCount.subscribe(),
+                getLibraryManga.subscribe(),
+                failedUpdatesManager.getFailedUpdates(),
+                getCategories.subscribe(),
+            ) { sources, libraryManga, failedUpdates, categories ->
+                Triple(sources, libraryManga, failedUpdates) to categories
+            }
                 .catch {
                     logcat(LogPriority.ERROR, it)
                     _channel.send(Event.FailedFetchingSourcesWithCount)
                 }
-                .collectLatest { sources ->
+                .collectLatest { (triple, categories) ->
+                    val (sources, libraryManga, failedUpdates) = triple
                     mutableState.update { state ->
-                        val categories = getCategories.await().associateBy { group -> group.id }
+                        val categoriesMap = categories.associateBy { group -> group.id }
                         state.copy(
                             sourcesCount = sources,
-                            items = getLibraryManga.await().filter { libraryManga ->
-                                failedUpdates.any { it.first.id == libraryManga.manga.id }
+                            items = libraryManga.filter { libraryManga ->
+                                failedUpdates.any { it.mangaId == libraryManga.manga.id }
                             }.map { libraryManga ->
                                 val source = sourceManager.get(libraryManga.manga.source)!!
                                 val errorMessage = failedUpdates.find {
-                                    it.first.id == libraryManga.manga.id
-                                }?.second
+                                    it.mangaId == libraryManga.manga.id
+                                }?.errorMessage
                                 FailedUpdatesManga(
                                     libraryManga = libraryManga,
                                     errorMessage = errorMessage,
                                     selected = libraryManga.id in selectedMangaIds,
                                     source = source,
-                                    category = categories[libraryManga.category]!!,
+                                    category = categoriesMap[libraryManga.category]!!,
                                 )
                             },
                             groupByMode = preferenceStore.getEnum("group_by_mode", GroupByMode.NONE).get(),
@@ -121,15 +131,17 @@ class FailedUpdatesScreenModel(
     }
 
     @Composable
-    fun categoryMap(items: List<FailedUpdatesManga>, groupMode: GroupByMode, sortMode: SortingMode, descendingOrder: Boolean): Map<String, List<FailedUpdatesManga>> {
+    fun categoryMap(items: List<FailedUpdatesManga>, groupMode: GroupByMode, sortMode: SortingMode, descendingOrder: Boolean): Map<String, Map<String?, List<FailedUpdatesManga>>> {
         val unsortedMap = when (groupMode) {
             GroupByMode.BY_CATEGORY -> items.groupBy { if (it.category.isSystemCategory) { stringResource(R.string.label_default) } else { it.category.name } }
+                .mapValues { entry -> entry.value.groupBy { it.errorMessage } }
             GroupByMode.BY_SOURCE -> items.groupBy { it.source.name }
+                .mapValues { entry -> entry.value.groupBy { it.errorMessage } }
             GroupByMode.NONE -> emptyMap()
         }
         return when (sortMode) {
             SortingMode.BY_ALPHABET -> {
-                val sortedMap = TreeMap<String, List<FailedUpdatesManga>>(if (descendingOrder) { compareByDescending { it } } else { compareBy { it } })
+                val sortedMap = TreeMap<String, Map<String?, List<FailedUpdatesManga>>>(if (descendingOrder) { compareByDescending { it } } else { compareBy { it } })
                 sortedMap.putAll(unsortedMap)
                 sortedMap
             }
@@ -168,6 +180,7 @@ class FailedUpdatesScreenModel(
         selected: Boolean,
         userSelected: Boolean = false,
         fromLongPress: Boolean = false,
+        groupByErrorMessage: Boolean = false,
     ) {
         mutableState.update { state ->
             val newItems = state.items.toMutableList().apply {
@@ -186,7 +199,6 @@ class FailedUpdatesScreenModel(
                         selectedPositions[0] = selectedIndex
                         selectedPositions[1] = selectedIndex
                     } else {
-                        // Try to select the items in-between when possible
                         val range: IntRange
                         if (selectedIndex < selectedPositions[0]) {
                             range = selectedIndex + 1 until selectedPositions[0]
@@ -195,15 +207,27 @@ class FailedUpdatesScreenModel(
                             range = (selectedPositions[1] + 1) until selectedIndex
                             selectedPositions[1] = selectedIndex
                         } else {
-                            // Just select itself
                             range = IntRange.EMPTY
                         }
 
-                        range.forEach {
-                            val inBetweenItem = get(it)
-                            if (!inBetweenItem.selected) {
-                                selectedMangaIds.add(inBetweenItem.libraryManga.manga.id)
-                                set(it, inBetweenItem.copy(selected = true))
+                        if (groupByErrorMessage) {
+                            val firstErrorMessage = getOrNull(selectedPositions[0])?.errorMessage
+                            val lastErrorMessage = getOrNull(selectedPositions[1])?.errorMessage
+
+                            range.forEach {
+                                val inBetweenItem = getOrNull(it)
+                                if (inBetweenItem != null && !inBetweenItem.selected && inBetweenItem.errorMessage == firstErrorMessage && inBetweenItem.errorMessage == lastErrorMessage) {
+                                    selectedMangaIds.add(inBetweenItem.libraryManga.manga.id)
+                                    set(it, inBetweenItem.copy(selected = true))
+                                }
+                            }
+                        } else {
+                            range.forEach {
+                                val inBetweenItem = get(it)
+                                if (!inBetweenItem.selected) {
+                                    selectedMangaIds.add(inBetweenItem.libraryManga.manga.id)
+                                    set(it, inBetweenItem.copy(selected = true))
+                                }
                             }
                         }
                     }
@@ -268,24 +292,28 @@ class FailedUpdatesScreenModel(
             val set = mangaList.map { it.id }.toHashSet()
             mutableState.update { state ->
                 state.copy(
-                    items = state.items.filterNot { it.libraryManga.id in set },
+                    items = state.items.filterNot { it.libraryManga.manga.id in set },
                 )
             }
-            failedUpdates = failedUpdates.filterNot { it.first.id in set }
-            LibraryUpdateJob.setNewFailedUpdates(set)
         }
     }
 
     fun dismissManga(selected: List<FailedUpdatesManga>) {
-        val set = selected.map { it.libraryManga.id }.toHashSet()
+        val set = selected.map { it.libraryManga.manga.id }.toHashSet()
+        val listOfMangaIds = selected.map { it.libraryManga.manga.id }
         toggleAllSelection(false)
         mutableState.update { state ->
             state.copy(
-                items = state.items.filterNot { it.libraryManga.id in set },
+                items = state.items.filterNot { it.libraryManga.manga.id in set },
             )
         }
-        failedUpdates = failedUpdates.filterNot { it.first.id in set }
-        LibraryUpdateJob.setNewFailedUpdates(set)
+//        failedUpdatesUI.filterNot { it.mangaId in set }
+//        if(failedUpdatesUI.isEmpty()){
+//            coroutineScope.launchIO {
+//                setWarningIconState(failedUpdatesManager)
+//            }
+//        }
+        coroutineScope.launchNonCancellable { failedUpdatesManager.removeFailedUpdatesByMangaIds(listOfMangaIds) }
     }
 
     fun openDeleteMangaDialog(selected: List<FailedUpdatesManga>) {

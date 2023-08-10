@@ -21,7 +21,6 @@ import eu.kanade.domain.manga.model.copyFrom
 import eu.kanade.domain.manga.model.toSManga
 import eu.kanade.domain.track.model.toDbTrack
 import eu.kanade.domain.track.model.toDomainTrack
-import eu.kanade.presentation.updates.setWarningIconEnabled
 import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
@@ -34,8 +33,6 @@ import eu.kanade.tachiyomi.source.model.SManga
 import eu.kanade.tachiyomi.source.model.UpdateStrategy
 import eu.kanade.tachiyomi.util.prepUpdateCover
 import eu.kanade.tachiyomi.util.shouldDownloadNewChapters
-import eu.kanade.tachiyomi.util.storage.getUriCompat
-import eu.kanade.tachiyomi.util.system.createFileInCacheDir
 import eu.kanade.tachiyomi.util.system.isConnectedToWifi
 import eu.kanade.tachiyomi.util.system.isRunning
 import eu.kanade.tachiyomi.util.system.workManager
@@ -58,6 +55,7 @@ import tachiyomi.domain.chapter.interactor.GetChapterByMangaId
 import tachiyomi.domain.chapter.model.Chapter
 import tachiyomi.domain.chapter.model.NoChaptersException
 import tachiyomi.domain.download.service.DownloadPreferences
+import tachiyomi.domain.failed.repository.FailedUpdatesRepository
 import tachiyomi.domain.library.model.LibraryManga
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.library.service.LibraryPreferences.Companion.DEVICE_BATTERY_NOT_LOW
@@ -79,7 +77,6 @@ import tachiyomi.domain.track.interactor.GetTracks
 import tachiyomi.domain.track.interactor.InsertTrack
 import uy.kohesive.injekt.Injekt
 import uy.kohesive.injekt.api.get
-import java.io.File
 import java.time.ZonedDateTime
 import java.util.Date
 import java.util.concurrent.CopyOnWriteArrayList
@@ -106,6 +103,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     private val insertTrack: InsertTrack = Injekt.get()
     private val syncChaptersWithTrackServiceTwoWay: SyncChaptersWithTrackServiceTwoWay = Injekt.get()
     private val setFetchInterval: SetFetchInterval = Injekt.get()
+    private val failedUpdatesManager: FailedUpdatesRepository = Injekt.get()
 
     private val notifier = LibraryUpdateNotifier(context)
 
@@ -228,12 +226,12 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val currentlyUpdatingManga = CopyOnWriteArrayList<Manga>()
         val newUpdates = CopyOnWriteArrayList<Pair<Manga, Array<Chapter>>>()
         val skippedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
-        val failedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
         val hasDownloads = AtomicBoolean(false)
         val restrictions = libraryPreferences.libraryUpdateMangaRestriction().get()
         val fetchWindow = setFetchInterval.getWindow(ZonedDateTime.now())
 
         coroutineScope {
+            failedUpdatesManager.removeAllFailedUpdates()
             mangaToUpdate.groupBy { it.manga.source }.values
                 .map { mangaInSource ->
                     async {
@@ -292,7 +290,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                     is SourceNotInstalledException -> context.getString(R.string.loader_not_implemented_error)
                                                     else -> e.message
                                                 }
-                                                failedUpdates.add(manga to errorMessage)
+                                                try {
+                                                    failedUpdatesManager.insert(manga, errorMessage)
+                                                } catch (e: Exception) {
+                                                    logcat(LogPriority.ERROR, e)
+                                                }
                                             }
                                         }
                                     }
@@ -318,15 +320,19 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             }
         }
 
-        if (failedUpdates.isNotEmpty()) {
-            newFailedUpdates = failedUpdates
-            setWarningIconEnabled(true)
-            val errorFile = writeErrorFile(failedUpdates)
-            notifier.showUpdateErrorNotification(
-                failedUpdates.size,
-                errorFile.getUriCompat(context),
-            )
-        }
+//        try {
+//            val failedUpdates = failedUpdatesManager.getFailedUpdates()
+//            if (failedUpdates.isNotEmpty()) {
+//            val errorFile = writeErrorFile(failedUpdates)
+//            notifier.showUpdateErrorNotification(
+//                failedUpdates.size,
+//                errorFile.getUriCompat(context),
+//            )
+//            }
+//        } catch (e: Exception) {
+//            logcat(LogPriority.ERROR, e)
+//        }
+
         if (skippedUpdates.isNotEmpty()) {
             // TODO: surface skipped reasons to user
             logcat {
@@ -495,36 +501,6 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
     }
 
     /**
-     * Writes basic file of update errors to cache dir.
-     */
-    private fun writeErrorFile(errors: List<Pair<Manga, String?>>): File {
-        try {
-            if (errors.isNotEmpty()) {
-                val file = context.createFileInCacheDir("tachiyomi_update_errors.txt")
-                file.bufferedWriter().use { out ->
-                    out.write(context.getString(R.string.library_errors_help, ERROR_LOG_HELP_URL) + "\n\n")
-                    // Error file format:
-                    // ! Error
-                    //   # Source
-                    //     - Manga
-                    errors.groupBy({ it.second }, { it.first }).forEach { (error, mangas) ->
-                        out.write("\n! ${error}\n")
-                        mangas.groupBy { it.source }.forEach { (srcId, mangas) ->
-                            val source = sourceManager.getOrStub(srcId)
-                            out.write("  # $source\n")
-                            mangas.forEach {
-                                out.write("    - ${it.title}\n")
-                            }
-                        }
-                    }
-                }
-                return file
-            }
-        } catch (_: Exception) {}
-        return File("")
-    }
-
-    /**
      * Defines what should be updated within a service execution.
      */
     enum class Target {
@@ -538,8 +514,6 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         private const val WORK_NAME_AUTO = "LibraryUpdate-auto"
         private const val WORK_NAME_MANUAL = "LibraryUpdate-manual"
 
-        private const val ERROR_LOG_HELP_URL = "https://tachiyomi.org/help/guides/troubleshooting"
-
         private const val MANGA_PER_SOURCE_QUEUE_WARNING_THRESHOLD = 60
 
         /**
@@ -551,16 +525,6 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
          * Key that defines what should be updated.
          */
         private const val KEY_TARGET = "target"
-
-        private var newFailedUpdates: List<Pair<Manga, String?>> = emptyList()
-
-        fun getNewFailedUpdates(): List<Pair<Manga, String?>> {
-            return newFailedUpdates
-        }
-
-        fun setNewFailedUpdates(set: HashSet<Long>) {
-            newFailedUpdates = newFailedUpdates.filterNot { it.first.id in set }
-        }
 
         fun cancelAllWorks(context: Context) {
             context.workManager.cancelAllWorkByTag(TAG)

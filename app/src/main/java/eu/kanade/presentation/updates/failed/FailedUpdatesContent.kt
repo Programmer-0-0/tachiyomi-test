@@ -1,6 +1,7 @@
 package eu.kanade.presentation.updates.failed
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateContentSize
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
@@ -21,7 +22,6 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListScope
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
-import androidx.compose.material.MaterialTheme.typography
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.outlined.FlightTakeoff
@@ -46,6 +46,7 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastAny
@@ -70,6 +71,7 @@ fun LazyListScope.failedUpdatesUiItems(
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
     onClick: (FailedUpdatesManga) -> Unit,
     onMigrateManga: (FailedUpdatesManga) -> Unit,
+    isUngrouped: Boolean,
 ) {
     items(
         items = items,
@@ -90,6 +92,7 @@ fun LazyListScope.failedUpdatesUiItems(
                 },
                 manga = item,
                 onMigrateManga = { onMigrateManga(item) }.takeIf { !selectionMode },
+                isUngrouped = isUngrouped,
             )
         }
     }
@@ -103,6 +106,8 @@ private fun FailedUpdatesUiItem(
     onClick: () -> Unit,
     onLongClick: () -> Unit,
     onMigrateManga: (() -> Unit)?,
+    isUngrouped: Boolean = false,
+    padding: Dp = MaterialTheme.padding.medium,
 ) {
     val haptic = LocalHapticFeedback.current
     val textAlpha = 1f
@@ -117,7 +122,7 @@ private fun FailedUpdatesUiItem(
                 },
             )
             .height(56.dp)
-            .padding(horizontal = MaterialTheme.padding.medium),
+            .padding(start = padding),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MangaCover.Square(
@@ -130,7 +135,8 @@ private fun FailedUpdatesUiItem(
         Column(
             modifier = Modifier
                 .padding(start = MaterialTheme.padding.medium)
-                .weight(1f),
+                .weight(1f)
+                .animateContentSize(),
         ) {
             Text(
                 text = manga.libraryManga.manga.title,
@@ -139,19 +145,20 @@ private fun FailedUpdatesUiItem(
                 color = LocalContentColor.current.copy(alpha = textAlpha),
                 overflow = TextOverflow.Ellipsis,
             )
-
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                var textHeight by remember { mutableIntStateOf(0) }
-                Text(
-                    text = manga.errorMessage ?: "Null",
-                    maxLines = 1,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.error,
-                    onTextLayout = { textHeight = it.size.height },
-                    modifier = Modifier
-                        .weight(weight = 1f, fill = false),
-                    overflow = TextOverflow.Ellipsis,
-                )
+            if (isUngrouped) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    var textHeight by remember { mutableIntStateOf(0) }
+                    Text(
+                        text = manga.errorMessage ?: "Null",
+                        maxLines = if (selected) Int.MAX_VALUE else 1,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.error,
+                        onTextLayout = { textHeight = it.size.height },
+                        modifier = Modifier
+                            .weight(weight = 1f, fill = false),
+                        overflow = TextOverflow.Ellipsis,
+                    )
+                }
             }
         }
 
@@ -169,47 +176,55 @@ fun returnSourceIcon(id: Long): ImageBitmap? {
 }
 
 fun LazyListScope.failedUpdatesGroupUiItem(
-    items: List<FailedUpdatesManga>,
+    errorMessageMap: Map<String?, List<FailedUpdatesManga>>,
     selectionMode: Boolean,
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
     onMangaClick: (FailedUpdatesManga) -> Unit,
     id: String,
     onMigrateManga: (FailedUpdatesManga) -> Unit,
     onGroupSelected: (List<FailedUpdatesManga>) -> Unit,
-    expanded: MutableMap<String, Boolean>,
+    expanded: MutableMap<Pair<String, String?>, Boolean>,
     showLanguageInContent: Boolean = true,
     isSourceOrCategory: Int,
     sourcesCount: List<Pair<Source, Long>>,
 ) {
     var key = ""
-    items.forEachIndexed { index, item ->
+    errorMessageMap.values.flatten().forEachIndexed { index, item ->
         key = "${item.category.id}_$index"
     }
-    stickyHeader(key = if (isSourceOrCategory == 1) { items.find { it.source.name == id }!!.source.id } else { key }) {
+    stickyHeader(
+        key = if (isSourceOrCategory == 1) {
+            errorMessageMap.values.flatten().find { it.source.name == id }!!.source.id
+        } else {
+            key
+        },
+    ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
                 .animateItemPlacement()
-                .selectedBackground(!items.fastAny { !it.selected })
+                .selectedBackground(!errorMessageMap.values.flatten().fastAny { !it.selected })
                 .combinedClickable(
                     onClick = {
-                        expanded[id] = if (expanded[id] == null) {
-                            false
-                        } else {
-                            !expanded[id]!!
+                        val categoryKey = Pair(id, null)
+                        if (!expanded.containsKey(categoryKey)) {
+                            expanded[categoryKey] = false
                         }
+                        expanded[categoryKey] = !expanded[categoryKey]!!
                     },
-                    onLongClick = { onGroupSelected(items) },
+                    onLongClick = { onGroupSelected(errorMessageMap.values.flatten()) },
                 )
                 .padding(
-                    horizontal = MaterialTheme.padding.medium,
+                    horizontal = 12.dp,
                     vertical = MaterialTheme.padding.small,
                 ),
             verticalAlignment = Alignment.CenterVertically,
         ) {
             if (isSourceOrCategory == 1) {
-                val item = items.find { it.source.name == id }!!.source
-                val sourceLangString = LocaleHelper.getSourceDisplayName(item.lang, LocalContext.current).takeIf { showLanguageInContent }
+                val item = errorMessageMap.values.flatten().find { it.source.name == id }!!.source
+                val sourceLangString =
+                    LocaleHelper.getSourceDisplayName(item.lang, LocalContext.current)
+                        .takeIf { showLanguageInContent }
                 val icon = returnSourceIcon(item.id)
                 if (icon != null) {
                     Image(
@@ -249,7 +264,7 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                         }
                     }
                 }
-                val mangaCount = items.size
+                val mangaCount = errorMessageMap.values.flatten().size
                 val sourceCount = sourcesCount.find { it.first.id == item.id }!!.second
                 val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
                 Pill(
@@ -260,8 +275,9 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                     fontSize = 14.sp,
                 )
                 val rotation by animateFloatAsState(
-                    targetValue = if (expanded[id] == true) 0f else -180f,
+                    targetValue = if (expanded[Pair(id, null)] == true) 0f else -180f,
                     animationSpec = tween(500),
+                    label = "",
                 )
                 Icon(
                     imageVector = Icons.Filled.KeyboardArrowUp,
@@ -273,15 +289,18 @@ fun LazyListScope.failedUpdatesGroupUiItem(
             } else if (isSourceOrCategory == 2) {
                 Column(
                     modifier = Modifier
-                        .padding(horizontal = MaterialTheme.padding.medium)
+                        .padding(horizontal = MaterialTheme.padding.small)
                         .weight(1f),
                 ) {
                     Text(
                         id,
-                        style = typography.h6,
+                        fontWeight = FontWeight.Medium,
+                        fontSize = 20.sp,
+                        lineHeight = 24.sp,
+                        letterSpacing = 0.15.sp,
                     )
                 }
-                val mangaCount = items.size
+                val mangaCount = errorMessageMap.values.flatten().size
                 val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
                 Pill(
                     text = "$mangaCount",
@@ -291,8 +310,9 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                     fontSize = 14.sp,
                 )
                 val rotation by animateFloatAsState(
-                    targetValue = if (expanded[id] == true) 0f else -180f,
+                    targetValue = if (expanded[Pair(id, null)] == true) 0f else -180f,
                     animationSpec = tween(500),
+                    label = "",
                 )
                 Icon(
                     imageVector = Icons.Filled.KeyboardArrowUp,
@@ -304,27 +324,100 @@ fun LazyListScope.failedUpdatesGroupUiItem(
             }
         }
     }
-
-    itemsIndexed(items, key = { _, item -> item.libraryManga.manga.id }) { _, item ->
-        AnimatedVisibility(
-            modifier = Modifier.animateItemPlacement(),
-            visible = expanded[id] == true,
+    errorMessageMap.forEach { (errorMessage, items) ->
+        val errorMessageHeaderId =
+            Pair(id, errorMessage)
+        stickyHeader(
+            key =
+            errorMessageHeaderId.hashCode(),
         ) {
-            FailedUpdatesUiItem(
-                modifier = Modifier,
-                selected = item.selected,
-                onLongClick = {
-                    onSelected(item, !item.selected, true, true)
-                },
-                onClick = {
-                    when {
-                        selectionMode -> onSelected(item, !item.selected, true, false)
-                        else -> onMangaClick(item)
+            AnimatedVisibility(modifier = Modifier.animateItemPlacement(), visible = expanded[Pair(id, null)] == true) {
+                Row(
+                    modifier =
+                    Modifier
+                        .fillMaxWidth()
+                        .animateItemPlacement()
+                        .selectedBackground(!items.fastAny { !it.selected })
+                        .combinedClickable(
+                            onClick =
+                            {
+                                expanded[errorMessageHeaderId] =
+                                    if (expanded[errorMessageHeaderId] ==
+                                        null
+                                    ) {
+                                        false
+                                    } else {
+                                        !expanded[errorMessageHeaderId]!!
+                                    }
+                            },
+                            onLongClick =
+                            { onGroupSelected(items) },
+                        )
+                        .padding(
+                            start = 30.dp,
+                            top = MaterialTheme.padding.small,
+                            bottom = MaterialTheme.padding.small,
+                            end = MaterialTheme.padding.small,
+                        ),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .weight(1f)
+                            .animateContentSize(),
+                    ) {
+                        Text(
+                            errorMessage ?: "Null",
+                            maxLines = if (expanded[errorMessageHeaderId] == true) Int.MAX_VALUE else 1,
+                            color = MaterialTheme.colorScheme.error,
+                            overflow = TextOverflow.Ellipsis,
+                            fontWeight = FontWeight.Medium,
+                            fontSize = 14.sp,
+                            lineHeight = 24.sp,
+                            letterSpacing = 0.15.sp,
+                        )
                     }
-                },
-                manga = item,
-                onMigrateManga = { onMigrateManga(item) }.takeIf { !selectionMode },
-            )
+                    val rotation by animateFloatAsState(
+                        targetValue = if (expanded[errorMessageHeaderId] == true) 0f else -180f,
+                        animationSpec = tween(500),
+                        label = "",
+                    )
+                    Box(
+                        modifier = Modifier
+                            .padding(top = 8.dp, bottom = 8.dp, start = 10.dp, end = 18.dp)
+                            .rotate(rotation),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Filled.KeyboardArrowUp,
+                            contentDescription = null,
+                        )
+                    }
+                }
+            }
+        }
+
+        itemsIndexed(items, key = { _, item -> item.libraryManga.manga.id }) { _, item ->
+            AnimatedVisibility(
+                modifier = Modifier.animateItemPlacement(),
+                visible = expanded[errorMessageHeaderId] == true && expanded[Pair(id, null)] == true,
+            ) {
+                FailedUpdatesUiItem(
+                    modifier = Modifier,
+                    selected = item.selected,
+                    onLongClick = {
+                        onSelected(item, !item.selected, true, true)
+                    },
+                    onClick = {
+                        when {
+                            selectionMode -> onSelected(item, !item.selected, true, false)
+                            else -> onMangaClick(item)
+                        }
+                    },
+                    manga = item,
+                    onMigrateManga = { onMigrateManga(item) }.takeIf { !selectionMode },
+                    padding = 34.dp,
+                )
+            }
         }
     }
 }
@@ -362,16 +455,16 @@ fun CategoryList(
     onMigrateManga: (FailedUpdatesManga) -> Unit,
     onGroupSelected: (List<FailedUpdatesManga>) -> Unit,
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
-    categoryMap: Map<String, List<FailedUpdatesManga>>,
+    categoryMap: Map<String, Map<String?, List<FailedUpdatesManga>>>,
     isSourceOrCategory: Int,
-    expanded: MutableMap<String, Boolean>,
+    expanded: MutableMap<Pair<String, String?>, Boolean>,
     sourcesCount: List<Pair<Source, Long>>,
 ) {
     FastScrollLazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxHeight()) {
-        categoryMap.forEach { (category, items) ->
+        categoryMap.forEach { (category, errorMessageMap) ->
             failedUpdatesGroupUiItem(
                 id = category,
-                items = items,
+                errorMessageMap = errorMessageMap,
                 selectionMode = selectionMode,
                 onMangaClick = onMangaClick,
                 onSelected = onSelected,

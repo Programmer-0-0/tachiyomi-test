@@ -27,6 +27,7 @@ import kotlinx.coroutines.flow.catch
 import kotlinx.coroutines.flow.collectLatest
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.distinctUntilChanged
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.merge
 import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.flow.update
@@ -38,6 +39,7 @@ import tachiyomi.core.util.system.logcat
 import tachiyomi.domain.chapter.interactor.GetChapter
 import tachiyomi.domain.chapter.interactor.UpdateChapter
 import tachiyomi.domain.chapter.model.ChapterUpdate
+import tachiyomi.domain.failed.repository.FailedUpdatesRepository
 import tachiyomi.domain.library.service.LibraryPreferences
 import tachiyomi.domain.manga.interactor.GetManga
 import tachiyomi.domain.source.service.SourceManager
@@ -59,6 +61,7 @@ class UpdatesScreenModel(
     private val getChapter: GetChapter = Injekt.get(),
     private val libraryPreferences: LibraryPreferences = Injekt.get(),
     val snackbarHostState: SnackbarHostState = SnackbarHostState(),
+    private val failedUpdatesManager: FailedUpdatesRepository = Injekt.get(),
 ) : StateScreenModel<UpdatesScreenModel.State>(State()) {
 
     private val _events: Channel<Event> = Channel(Int.MAX_VALUE)
@@ -88,12 +91,17 @@ class UpdatesScreenModel(
                     _events.send(Event.InternalError)
                 }
                 .collectLatest { updates ->
-                    mutableState.update {
-                        it.copy(
-                            isLoading = false,
-                            items = updates.toUpdateItems(),
-                        )
-                    }
+                    failedUpdatesManager.getFailedUpdatesCount()
+                        .map { it > 0L }
+                        .collectLatest { iconState ->
+                            mutableState.update { state ->
+                                state.copy(
+                                    isLoading = false,
+                                    items = updates.toUpdateItems(),
+                                    warningIconState = iconState,
+                                )
+                            }
+                        }
                 }
         }
 
@@ -370,6 +378,7 @@ class UpdatesScreenModel(
         val isLoading: Boolean = true,
         val items: List<UpdatesItem> = emptyList(),
         val dialog: Dialog? = null,
+        val warningIconState: Boolean = false,
     ) {
         val selected = items.filter { it.selected }
         val selectionMode = selected.isNotEmpty()

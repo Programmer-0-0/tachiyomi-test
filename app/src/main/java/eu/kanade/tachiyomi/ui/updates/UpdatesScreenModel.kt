@@ -378,7 +378,7 @@ class UpdatesScreenModel(
         val isLoading: Boolean = true,
         val items: List<UpdatesItem> = emptyList(),
         val dialog: Dialog? = null,
-        val warningIconState: Boolean = false,
+        val hasFailedUpdates: Boolean = false,
     ) {
         val selected = items.filter { it.selected }
         val selectionMode = selected.isNotEmpty()

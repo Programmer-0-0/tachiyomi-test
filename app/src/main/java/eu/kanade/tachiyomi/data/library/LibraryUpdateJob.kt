@@ -227,7 +227,6 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val newUpdates = CopyOnWriteArrayList<Pair<Manga, Array<Chapter>>>()
         val skippedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
         val hasDownloads = AtomicBoolean(false)
-        val hasFailedUpdates = AtomicBoolean(false)
         val failedUpdatesCount = AtomicInteger(0)
         val restrictions = libraryPreferences.libraryUpdateMangaRestriction().get()
         val fetchWindow = setFetchInterval.getWindow(ZonedDateTime.now())
@@ -293,7 +292,6 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                     else -> e.message ?: "Null"
                                                 }
                                                 try {
-                                                    hasFailedUpdates.set(true)
                                                     failedUpdatesCount.getAndIncrement()
                                                     failedUpdatesManager.insert(manga.id, errorMessage)
                                                 } catch (e: Exception) {
@@ -324,7 +322,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             }
         }
 
-        if (hasFailedUpdates.get()) {
+        if (failedUpdatesCount.get() > 0) {
             notifier.showUpdateErrorNotification(
                 failedUpdatesCount.get(),
             )

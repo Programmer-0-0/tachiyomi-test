@@ -227,6 +227,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val newUpdates = CopyOnWriteArrayList<Pair<Manga, Array<Chapter>>>()
         val skippedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
         val hasDownloads = AtomicBoolean(false)
+        val hasFailedUpdates = AtomicBoolean(false)
+        val failedUpdatesCount = AtomicInteger(0)
         val restrictions = libraryPreferences.libraryUpdateMangaRestriction().get()
         val fetchWindow = setFetchInterval.getWindow(ZonedDateTime.now())
 
@@ -291,6 +293,8 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                                     else -> e.message ?: "Null"
                                                 }
                                                 try {
+                                                    hasFailedUpdates.set(true)
+                                                    failedUpdatesCount.getAndIncrement()
                                                     failedUpdatesManager.insert(manga.id, errorMessage)
                                                 } catch (e: Exception) {
                                                     logcat(LogPriority.ERROR, e)
@@ -320,18 +324,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
             }
         }
 
-//        try {
-//            val failedUpdates = failedUpdatesManager.getFailedUpdates()
-//            if (failedUpdates.isNotEmpty()) {
-//            val errorFile = writeErrorFile(failedUpdates)
-//            notifier.showUpdateErrorNotification(
-//                failedUpdates.size,
-//                errorFile.getUriCompat(context),
-//            )
-//            }
-//        } catch (e: Exception) {
-//            logcat(LogPriority.ERROR, e)
-//        }
+        if (hasFailedUpdates.get()) {
+            notifier.showUpdateErrorNotification(
+                failedUpdatesCount.get(),
+            )
+        }
 
         if (skippedUpdates.isNotEmpty()) {
             // TODO: surface skipped reasons to user

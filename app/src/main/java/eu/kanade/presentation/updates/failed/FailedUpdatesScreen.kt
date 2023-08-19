@@ -1,13 +1,18 @@
 package eu.kanade.presentation.updates.failed
 
 import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.outlined.ArrowLeft
 import androidx.compose.material.icons.outlined.ArrowRight
 import androidx.compose.material.icons.outlined.FlipToBack
+import androidx.compose.material.icons.outlined.HelpOutline
 import androidx.compose.material.icons.outlined.SelectAll
 import androidx.compose.material.icons.outlined.Sort
 import androidx.compose.material3.DropdownMenuItem
@@ -27,7 +32,9 @@ import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.LayoutDirection
@@ -44,31 +51,43 @@ import eu.kanade.presentation.library.DeleteLibraryMangaDialog
 import eu.kanade.presentation.manga.components.FailedUpdatesBottomActionMenu
 import eu.kanade.presentation.util.Screen
 import eu.kanade.tachiyomi.R
-import eu.kanade.tachiyomi.ui.browse.migration.search.MigrateSearchScreen
 import eu.kanade.tachiyomi.ui.manga.MangaScreen
+import eu.kanade.tachiyomi.util.system.copyToClipboard
 import tachiyomi.domain.manga.model.Manga
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.Pill
 import tachiyomi.presentation.core.components.SortItem
+import tachiyomi.presentation.core.components.material.ExtendedFloatingActionButton
 import tachiyomi.presentation.core.components.material.Scaffold
 import tachiyomi.presentation.core.screens.EmptyScreen
 import tachiyomi.presentation.core.screens.LoadingScreen
+import tachiyomi.presentation.core.util.isScrolledToEnd
+import tachiyomi.presentation.core.util.isScrollingUp
 import tachiyomi.source.local.isLocal
 
 class FailedUpdatesScreen : Screen() {
     @Composable
     override fun Content() {
         val navigator = LocalNavigator.currentOrThrow
+        val context = LocalContext.current
+        val uriHandler = LocalUriHandler.current
 
         val screenModel = rememberScreenModel { FailedUpdatesScreenModel() }
         val state by screenModel.state.collectAsState()
+        val failedUpdatesListState = rememberLazyListState()
 
-        val categoryExpandedMapSaver: Saver<MutableMap<Pair<String, String?>, Boolean>, *> = Saver(
-            save = { map -> map.toMap() },
-            restore = { map -> mutableStateMapOf(*map.toList().toTypedArray()) },
+        val categoryExpandedMapSaver: Saver<MutableMap<GroupKey, Boolean>, *> = Saver(
+            save = { map -> map.mapKeys { (key, _) -> key.categoryOrSource to key.errorMessagePair } },
+            restore = { map ->
+                val temp = mutableListOf<Pair<GroupKey, Boolean>>()
+                for ((key, value) in map) {
+                    temp.add(GroupKey(key.first, key.second) to value)
+                }
+                mutableStateMapOf(*temp.toTypedArray())
+            },
         )
 
-        var expanded = emptyMap<Pair<String, String?>, Boolean>().toMutableMap()
+        var expanded = emptyMap<GroupKey, Boolean>().toMutableMap()
 
         Scaffold(
             topBar = { scrollBehavior ->
@@ -77,7 +96,7 @@ class FailedUpdatesScreen : Screen() {
                     items = state.items,
                     selected = state.selected,
                     onSelectAll = { screenModel.toggleAllSelection(true) },
-                    onIgnoreAll = { screenModel.dismissManga(state.items) },
+                    onDismissAll = { screenModel.dismissManga(state.items) },
                     onExpandAll = { expanded.keys.forEach { expanded[it] = true } },
                     onContractAll = { expanded.keys.forEach { expanded[it] = false } },
                     onInvertSelection = { screenModel.invertSelection() },
@@ -96,7 +115,26 @@ class FailedUpdatesScreen : Screen() {
                     visible = state.selectionMode,
                     onDeleteClicked = { screenModel.openDeleteMangaDialog(state.selected) },
                     onDismissClicked = { screenModel.dismissManga(state.selected) },
+                    onInfoClicked = { errorMessage ->
+                        screenModel.openErrorMessageDialog(errorMessage)
+                    },
+                    selected = state.selected,
+                    groupingMode = state.groupByMode,
                 )
+            },
+            floatingActionButton = {
+                AnimatedVisibility(
+                    visible = state.items.isNotEmpty(),
+                    enter = fadeIn(),
+                    exit = fadeOut(),
+                ) {
+                    ExtendedFloatingActionButton(
+                        text = { Text(text = stringResource(R.string.label_help)) },
+                        icon = { Icon(imageVector = Icons.Outlined.HelpOutline, contentDescription = null) },
+                        onClick = { uriHandler.openUri("https://tachiyomi.org/help/guides/troubleshooting") },
+                        expanded = failedUpdatesListState.isScrollingUp() || failedUpdatesListState.isScrolledToEnd(),
+                    )
+                }
             },
         ) { contentPadding ->
             when {
@@ -112,6 +150,7 @@ class FailedUpdatesScreen : Screen() {
                     when (state.groupByMode) {
                         GroupByMode.NONE -> FastScrollLazyColumn(
                             contentPadding = contentPadding,
+                            state = failedUpdatesListState,
                         ) {
                             failedUpdatesUiItems(
                                 items = state.items,
@@ -122,12 +161,7 @@ class FailedUpdatesScreen : Screen() {
                                     )
                                 },
                                 onSelected = screenModel::toggleSelection,
-                                onMigrateManga = { item ->
-                                    navigator.push(
-                                        MigrateSearchScreen(item.libraryManga.manga.id),
-                                    )
-                                },
-                                isUngrouped = true,
+                                groupingMode = state.groupByMode,
                             )
                         }
 
@@ -143,12 +177,12 @@ class FailedUpdatesScreen : Screen() {
                                 key = "CategoryExpandedMap",
                                 init = {
                                     mutableStateMapOf(
-                                        *categoryMap.keys.flatMap { category ->
-                                            listOf(Pair(category, null) to false)
+                                        *categoryMap.keys.flatMap { source ->
+                                            listOf(GroupKey(source, Pair("", "")) to false)
                                         }.toTypedArray(),
                                         *categoryMap.flatMap { entry ->
                                             entry.value.keys.map { errorMessage ->
-                                                Pair(entry.key, errorMessage) to false
+                                                GroupKey(entry.key, errorMessage) to false
                                             }
                                         }.toTypedArray(),
                                     )
@@ -162,66 +196,20 @@ class FailedUpdatesScreen : Screen() {
                                         MangaScreen(item.libraryManga.manga.id),
                                     )
                                 },
-                                onMigrateManga = { item ->
-                                    navigator.push(
-                                        MigrateSearchScreen(item.libraryManga.manga.id),
-                                    )
-                                },
                                 onGroupSelected = screenModel::groupSelection,
                                 onSelected = { item, selected, userSelected, fromLongPress ->
                                     screenModel.toggleSelection(item, selected, userSelected, fromLongPress, true)
                                 },
                                 categoryMap = categoryMap,
-                                isSourceOrCategory = 1,
                                 expanded = expanded,
                                 sourcesCount = state.sourcesCount,
-                            )
-                        }
-
-                        GroupByMode.BY_CATEGORY -> {
-                            val categoryMap = screenModel.categoryMap(
-                                state.items,
-                                GroupByMode.BY_CATEGORY,
-                                state.sortMode,
-                                state.descendingOrder,
-                            )
-                            expanded = rememberSaveable(
-                                saver = categoryExpandedMapSaver,
-                                key = "CategoryExpandedMap",
-                                init = {
-                                    mutableStateMapOf(
-                                        *categoryMap.keys.flatMap { category ->
-                                            listOf(Pair(category, null) to false)
-                                        }.toTypedArray(),
-                                        *categoryMap.flatMap { entry ->
-                                            entry.value.keys.map { errorMessage ->
-                                                Pair(entry.key, errorMessage) to false
-                                            }
-                                        }.toTypedArray(),
-                                    )
+                                onClickIcon = { errorMessage ->
+                                    screenModel.openErrorMessageDialog(errorMessage)
                                 },
-                            )
-                            CategoryList(
-                                contentPadding = contentPadding,
-                                selectionMode = state.selectionMode,
-                                onMangaClick = { item ->
-                                    navigator.push(
-                                        MangaScreen(item.libraryManga.manga.id),
-                                    )
+                                onLongClickIcon = { errorMessage ->
+                                    context.copyToClipboard(errorMessage, errorMessage)
                                 },
-                                onMigrateManga = { item ->
-                                    navigator.push(
-                                        MigrateSearchScreen(item.libraryManga.manga.id),
-                                    )
-                                },
-                                onGroupSelected = screenModel::groupSelection,
-                                onSelected = { item, selected, userSelected, fromLongPress ->
-                                    screenModel.toggleSelection(item, selected, userSelected, fromLongPress, true)
-                                },
-                                categoryMap = categoryMap,
-                                isSourceOrCategory = 2,
-                                expanded = expanded,
-                                sourcesCount = state.sourcesCount,
+                                lazyListState = failedUpdatesListState,
                             )
                         }
                     }
@@ -240,6 +228,16 @@ class FailedUpdatesScreen : Screen() {
                     },
                 )
             }
+            is Dialog.ShowErrorMessage -> {
+                ErrorMessageDialog(
+                    onDismissRequest = onDismissRequest,
+                    onCopyClick = {
+                        context.copyToClipboard(dialog.errorMessage, dialog.errorMessage)
+                        screenModel.toggleAllSelection(false)
+                    },
+                    errorMessage = dialog.errorMessage,
+                )
+            }
             null -> {}
         }
     }
@@ -256,7 +254,7 @@ private fun FailedUpdatesAppBar(
     onCancelActionMode: () -> Unit,
     onClickSort: (SortingMode) -> Unit,
     onClickGroup: (GroupByMode) -> Unit,
-    onIgnoreAll: () -> Unit,
+    onDismissAll: () -> Unit,
     onExpandAll: () -> Unit,
     onContractAll: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
@@ -328,14 +326,6 @@ private fun FailedUpdatesAppBar(
                                         onDismissRequest()
                                     },
                                 )
-                                DropdownMenuItem(
-                                    text = { Text(text = stringResource(R.string.action_group_by_category)) },
-                                    onClick = {
-                                        onClickGroup(GroupByMode.BY_CATEGORY)
-                                        closeMenu()
-                                        onDismissRequest()
-                                    },
-                                )
                             },
                         )
                         val isLtr = LocalLayoutDirection.current == LayoutDirection.Ltr
@@ -361,8 +351,8 @@ private fun FailedUpdatesAppBar(
                         onClick = { mainExpanded = !mainExpanded },
                     )
                     actions += AppBar.OverflowAction(
-                        title = stringResource(R.string.action_ignore_all),
-                        onClick = onIgnoreAll,
+                        title = stringResource(R.string.action_dismiss_all),
+                        onClick = onDismissAll,
                     )
                     if (groupByMode != GroupByMode.NONE) {
                         if (expandAll) {

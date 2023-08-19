@@ -2,17 +2,19 @@ package eu.kanade.presentation.updates.failed
 
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateContentSize
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
+import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -20,45 +22,52 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.lazy.LazyListScope
+import androidx.compose.foundation.lazy.LazyListState
 import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.foundation.shape.CornerSize
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
-import androidx.compose.material.icons.outlined.FlightTakeoff
+import androidx.compose.material.icons.rounded.Warning
+import androidx.compose.material.ripple.rememberRipple
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.material3.minimumInteractiveComponentSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.ImageBitmap
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.semantics.Role
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.util.fastAny
 import androidx.core.graphics.drawable.toBitmap
 import eu.kanade.presentation.manga.components.MangaCover
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.extension.ExtensionManager
 import eu.kanade.tachiyomi.util.system.LocaleHelper
 import tachiyomi.domain.source.model.Source
 import tachiyomi.presentation.core.components.FastScrollLazyColumn
 import tachiyomi.presentation.core.components.Pill
-import tachiyomi.presentation.core.components.material.TextButton
 import tachiyomi.presentation.core.components.material.padding
 import tachiyomi.presentation.core.util.secondaryItemAlpha
 import tachiyomi.presentation.core.util.selectedBackground
@@ -70,8 +79,7 @@ fun LazyListScope.failedUpdatesUiItems(
     selectionMode: Boolean,
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
     onClick: (FailedUpdatesManga) -> Unit,
-    onMigrateManga: (FailedUpdatesManga) -> Unit,
-    isUngrouped: Boolean,
+    groupingMode: GroupByMode,
 ) {
     items(
         items = items,
@@ -91,8 +99,7 @@ fun LazyListScope.failedUpdatesUiItems(
                     }
                 },
                 manga = item,
-                onMigrateManga = { onMigrateManga(item) }.takeIf { !selectionMode },
-                isUngrouped = isUngrouped,
+                groupingMode = groupingMode,
             )
         }
     }
@@ -105,9 +112,7 @@ private fun FailedUpdatesUiItem(
     selected: Boolean,
     onClick: () -> Unit,
     onLongClick: () -> Unit,
-    onMigrateManga: (() -> Unit)?,
-    isUngrouped: Boolean = false,
-    padding: Dp = MaterialTheme.padding.medium,
+    groupingMode: GroupByMode = GroupByMode.BY_SOURCE,
 ) {
     val haptic = LocalHapticFeedback.current
     val textAlpha = 1f
@@ -122,7 +127,7 @@ private fun FailedUpdatesUiItem(
                 },
             )
             .height(56.dp)
-            .padding(start = padding),
+            .padding(start = MaterialTheme.padding.medium),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         MangaCover.Square(
@@ -145,11 +150,11 @@ private fun FailedUpdatesUiItem(
                 color = LocalContentColor.current.copy(alpha = textAlpha),
                 overflow = TextOverflow.Ellipsis,
             )
-            if (isUngrouped) {
+            if (groupingMode == GroupByMode.NONE) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     var textHeight by remember { mutableIntStateOf(0) }
                     Text(
-                        text = manga.errorMessage ?: "Null",
+                        text = manga.simplifiedErrorMessage,
                         maxLines = if (selected) Int.MAX_VALUE else 1,
                         style = MaterialTheme.typography.bodySmall,
                         color = MaterialTheme.colorScheme.error,
@@ -161,11 +166,6 @@ private fun FailedUpdatesUiItem(
                 }
             }
         }
-
-        MigrateIndicator(
-            modifier = Modifier.padding(start = 4.dp),
-            onClick = { onMigrateManga?.invoke() },
-        )
     }
 }
 
@@ -176,274 +176,293 @@ fun returnSourceIcon(id: Long): ImageBitmap? {
 }
 
 fun LazyListScope.failedUpdatesGroupUiItem(
-    errorMessageMap: Map<String?, List<FailedUpdatesManga>>,
+    errorMessageMap: Map<Pair<String, String>, List<FailedUpdatesManga>>,
     selectionMode: Boolean,
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
     onMangaClick: (FailedUpdatesManga) -> Unit,
     id: String,
-    onMigrateManga: (FailedUpdatesManga) -> Unit,
     onGroupSelected: (List<FailedUpdatesManga>) -> Unit,
-    expanded: MutableMap<Pair<String, String?>, Boolean>,
+    expanded: MutableMap<GroupKey, Boolean>,
     showLanguageInContent: Boolean = true,
-    isSourceOrCategory: Int,
     sourcesCount: List<Pair<Source, Long>>,
+    onClickIcon: (String) -> Unit = {},
+    onLongClickIcon: (String) -> Unit = {},
 ) {
-    var key = ""
-    errorMessageMap.values.flatten().forEachIndexed { index, item ->
-        key = "${item.category.id}_$index"
-    }
-    stickyHeader(
-        key = if (isSourceOrCategory == 1) {
-            errorMessageMap.values.flatten().find { it.source.name == id }!!.source.id
-        } else {
-            key
-        },
+    item(
+        key = errorMessageMap.values.flatten().find { it.source.name == id }!!.source.id,
     ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .animateItemPlacement()
-                .selectedBackground(!errorMessageMap.values.flatten().fastAny { !it.selected })
-                .combinedClickable(
-                    onClick = {
-                        val categoryKey = Pair(id, null)
-                        if (!expanded.containsKey(categoryKey)) {
-                            expanded[categoryKey] = false
-                        }
-                        expanded[categoryKey] = !expanded[categoryKey]!!
-                    },
-                    onLongClick = { onGroupSelected(errorMessageMap.values.flatten()) },
-                )
-                .padding(
-                    horizontal = 12.dp,
-                    vertical = MaterialTheme.padding.small,
-                ),
-            verticalAlignment = Alignment.CenterVertically,
-        ) {
-            if (isSourceOrCategory == 1) {
-                val item = errorMessageMap.values.flatten().find { it.source.name == id }!!.source
-                val sourceLangString =
-                    LocaleHelper.getSourceDisplayName(item.lang, LocalContext.current)
-                        .takeIf { showLanguageInContent }
-                val icon = returnSourceIcon(item.id)
-                if (icon != null) {
-                    Image(
-                        bitmap = icon,
-                        contentDescription = null,
-                        modifier = Modifier
-                            .height(50.dp)
-                            .aspectRatio(1f),
-                    )
-                }
-                Column(
-                    modifier = Modifier
-                        .padding(horizontal = MaterialTheme.padding.medium)
-                        .weight(1f),
-                ) {
-                    Text(
-                        text = item.name.ifBlank { item.id.toString() },
-                        maxLines = 1,
-                        overflow = TextOverflow.Ellipsis,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 16.sp,
-                        lineHeight = 24.sp,
-                        letterSpacing = 0.15.sp,
-                    )
-                    Row(
-                        horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
-                        verticalAlignment = Alignment.CenterVertically,
-                    ) {
-                        if (sourceLangString != null) {
-                            Text(
-                                modifier = Modifier.secondaryItemAlpha(),
-                                text = sourceLangString,
-                                maxLines = 1,
-                                overflow = TextOverflow.Ellipsis,
-                                style = MaterialTheme.typography.bodySmall,
-                            )
-                        }
-                    }
-                }
-                val mangaCount = errorMessageMap.values.flatten().size
-                val sourceCount = sourcesCount.find { it.first.id == item.id }!!.second
-                val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
-                Pill(
-                    text = "$mangaCount/$sourceCount",
-                    modifier = Modifier.padding(start = 4.dp),
-                    color = MaterialTheme.colorScheme.onBackground
-                        .copy(alpha = pillAlpha),
-                    fontSize = 14.sp,
-                )
-                val rotation by animateFloatAsState(
-                    targetValue = if (expanded[Pair(id, null)] == true) 0f else -180f,
-                    animationSpec = tween(500),
-                    label = "",
-                )
-                Icon(
-                    imageVector = Icons.Filled.KeyboardArrowUp,
-                    modifier = Modifier
-                        .rotate(rotation)
-                        .padding(vertical = 8.dp, horizontal = 16.dp),
-                    contentDescription = null,
-                )
-            } else if (isSourceOrCategory == 2) {
-                Column(
-                    modifier = Modifier
-                        .padding(horizontal = MaterialTheme.padding.small)
-                        .weight(1f),
-                ) {
-                    Text(
-                        id,
-                        fontWeight = FontWeight.Medium,
-                        fontSize = 20.sp,
-                        lineHeight = 24.sp,
-                        letterSpacing = 0.15.sp,
-                    )
-                }
-                val mangaCount = errorMessageMap.values.flatten().size
-                val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
-                Pill(
-                    text = "$mangaCount",
-                    modifier = Modifier.padding(start = 4.dp),
-                    color = MaterialTheme.colorScheme.onBackground
-                        .copy(alpha = pillAlpha),
-                    fontSize = 14.sp,
-                )
-                val rotation by animateFloatAsState(
-                    targetValue = if (expanded[Pair(id, null)] == true) 0f else -180f,
-                    animationSpec = tween(500),
-                    label = "",
-                )
-                Icon(
-                    imageVector = Icons.Filled.KeyboardArrowUp,
-                    modifier = Modifier
-                        .rotate(rotation)
-                        .padding(vertical = 8.dp, horizontal = 25.dp),
-                    contentDescription = null,
-                )
-            }
+        val cardColor = if (isSystemInDarkTheme()) {
+            Color(android.graphics.Color.parseColor("#313133"))
+        } else {
+            Color(android.graphics.Color.parseColor("#c5c5c5"))
         }
-    }
-    errorMessageMap.forEach { (errorMessage, items) ->
-        val errorMessageHeaderId =
-            Pair(id, errorMessage)
-        stickyHeader(
-            key =
-            errorMessageHeaderId.hashCode(),
+        Card(
+            colors = CardDefaults.cardColors(
+                containerColor = cardColor,
+            ),
+            elevation = CardDefaults.cardElevation(
+                defaultElevation = 2.dp,
+            ),
+            shape = RoundedCornerShape(corner = CornerSize(15.dp)),
+            modifier = Modifier
+                .padding(vertical = 9.dp)
+                .animateItemPlacement(
+                    spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow,
+                    ),
+                )
+                .fillMaxWidth(),
         ) {
-            AnimatedVisibility(modifier = Modifier.animateItemPlacement(), visible = expanded[Pair(id, null)] == true) {
+            Column {
                 Row(
-                    modifier =
-                    Modifier
+                    modifier = Modifier
                         .fillMaxWidth()
-                        .animateItemPlacement()
-                        .selectedBackground(!items.fastAny { !it.selected })
+                        .selectedBackground(
+                            !errorMessageMap.values
+                                .flatten()
+                                .fastAny { !it.selected },
+                        )
                         .combinedClickable(
-                            onClick =
-                            {
-                                expanded[errorMessageHeaderId] =
-                                    if (expanded[errorMessageHeaderId] ==
-                                        null
-                                    ) {
-                                        false
-                                    } else {
-                                        !expanded[errorMessageHeaderId]!!
-                                    }
+                            onClick = {
+                                val categoryKey = GroupKey(id, Pair("", ""))
+                                if (!expanded.containsKey(categoryKey)) {
+                                    expanded[categoryKey] = false
+                                }
+                                expanded[categoryKey] = !expanded[categoryKey]!!
                             },
-                            onLongClick =
-                            { onGroupSelected(items) },
+                            onLongClick = { onGroupSelected(errorMessageMap.values.flatten()) },
                         )
                         .padding(
-                            start = 30.dp,
-                            top = MaterialTheme.padding.small,
-                            bottom = MaterialTheme.padding.small,
-                            end = MaterialTheme.padding.small,
+                            horizontal = 12.dp,
+                            vertical = MaterialTheme.padding.small,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
+                    val item = errorMessageMap.values.flatten().find { it.source.name == id }!!.source
+                    val sourceLangString =
+                        LocaleHelper.getSourceDisplayName(item.lang, LocalContext.current)
+                            .takeIf { showLanguageInContent }
+                    val icon = returnSourceIcon(item.id)
+                    if (icon != null) {
+                        Image(
+                            bitmap = icon,
+                            contentDescription = null,
+                            modifier = Modifier
+                                .height(50.dp)
+                                .aspectRatio(1f),
+                        )
+                    }
                     Column(
                         modifier = Modifier
-                            .weight(1f)
-                            .animateContentSize(),
+                            .padding(horizontal = MaterialTheme.padding.medium)
+                            .weight(1f),
                     ) {
                         Text(
-                            errorMessage ?: "Null",
-                            maxLines = if (expanded[errorMessageHeaderId] == true) Int.MAX_VALUE else 1,
-                            color = MaterialTheme.colorScheme.error,
+                            text = item.name.ifBlank { item.id.toString() },
+                            maxLines = 1,
                             overflow = TextOverflow.Ellipsis,
                             fontWeight = FontWeight.Medium,
-                            fontSize = 14.sp,
+                            fontSize = 16.sp,
                             lineHeight = 24.sp,
                             letterSpacing = 0.15.sp,
                         )
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(MaterialTheme.padding.small),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            if (sourceLangString != null) {
+                                Text(
+                                    modifier = Modifier.secondaryItemAlpha(),
+                                    text = sourceLangString,
+                                    maxLines = 1,
+                                    overflow = TextOverflow.Ellipsis,
+                                    style = MaterialTheme.typography.bodySmall,
+                                )
+                            }
+                        }
                     }
+                    val mangaCount = errorMessageMap.values.flatten().size
+                    val sourceCount = sourcesCount.find { it.first.id == item.id }!!.second
+                    val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
+                    Pill(
+                        text = "$mangaCount/$sourceCount",
+                        modifier = Modifier.padding(start = 4.dp),
+                        color = MaterialTheme.colorScheme.onBackground
+                            .copy(alpha = pillAlpha),
+                        fontSize = 14.sp,
+                    )
                     val rotation by animateFloatAsState(
-                        targetValue = if (expanded[errorMessageHeaderId] == true) 0f else -180f,
+                        targetValue = if (expanded[GroupKey(id, Pair("", ""))] == true) 0f else -180f,
                         animationSpec = tween(500),
                         label = "",
                     )
-                    Box(
+                    Icon(
+                        imageVector = Icons.Filled.KeyboardArrowUp,
                         modifier = Modifier
-                            .padding(top = 8.dp, bottom = 8.dp, start = 10.dp, end = 18.dp)
-                            .rotate(rotation),
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.KeyboardArrowUp,
-                            contentDescription = null,
-                        )
+                            .rotate(rotation)
+                            .padding(vertical = 8.dp, horizontal = 14.dp),
+                        contentDescription = null,
+                    )
+                }
+                Column {
+                    errorMessageMap.forEach { (errorMessagePair, items) ->
+                        val errorMessageHeaderId = GroupKey(id, errorMessagePair)
+                        AnimatedVisibility(
+                            modifier = Modifier,
+                            visible = expanded[GroupKey(id, Pair("", ""))] == true,
+                        ) {
+                            HorizontalDivider(thickness = 0.5.dp, color = Color.Gray)
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .selectedBackground(!items.fastAny { !it.selected })
+                                    .combinedClickable(
+                                        onClick =
+                                        {
+                                            expanded[errorMessageHeaderId] =
+                                                if (expanded[errorMessageHeaderId] ==
+                                                    null
+                                                ) {
+                                                    false
+                                                } else {
+                                                    !expanded[errorMessageHeaderId]!!
+                                                }
+                                        },
+                                        onLongClick =
+                                        { onGroupSelected(items) },
+                                    )
+                                    .padding(
+                                        start = 6.dp,
+                                        end = MaterialTheme.padding.small,
+                                        top = MaterialTheme.padding.small,
+                                        bottom = MaterialTheme.padding.small,
+                                    ),
+                                verticalAlignment = Alignment.CenterVertically,
+                            ) {
+                                CustomIconButton(
+                                    onClick = {
+                                        onClickIcon(
+                                            errorMessagePair.first,
+                                        )
+                                    },
+                                    onLongClick = {
+                                        onLongClickIcon(
+                                            errorMessagePair.first,
+                                        )
+                                    },
+                                    modifier = Modifier,
+                                    content = {
+                                        Icon(
+                                            imageVector = Icons.Rounded.Warning,
+                                            contentDescription = "",
+                                            tint = MaterialTheme.colorScheme.error,
+                                        )
+                                    },
+                                )
+                                Column(
+                                    modifier = Modifier
+                                        .weight(1f),
+                                ) {
+                                    Text(
+                                        errorMessagePair.second.ifEmpty {
+                                            errorMessagePair.first.substringAfter(":").substring(1)
+                                        },
+                                        maxLines = 1,
+                                        color = MaterialTheme.colorScheme.error,
+                                        overflow = TextOverflow.Ellipsis,
+                                        fontWeight = FontWeight.Medium,
+                                        fontSize = 14.sp,
+                                        lineHeight = 24.sp,
+                                        letterSpacing = 0.15.sp,
+                                    )
+                                }
+                                val rotation by animateFloatAsState(
+                                    targetValue = if (expanded[errorMessageHeaderId] == true) 0f else -180f,
+                                    animationSpec = tween(500),
+                                    label = "",
+                                )
+                                Box(
+                                    modifier = Modifier
+                                        .padding(
+                                            top = 8.dp,
+                                            bottom = 8.dp,
+                                            start = 10.dp,
+                                            end = 18.dp,
+                                        )
+                                        .rotate(rotation),
+                                ) {
+                                    Icon(
+                                        imageVector = Icons.Filled.KeyboardArrowUp,
+                                        contentDescription = null,
+                                    )
+                                }
+                            }
+                        }
+                        Column {
+                            items.forEachIndexed { _, item ->
+                                AnimatedVisibility(
+                                    modifier = Modifier,
+                                    visible = expanded[errorMessageHeaderId] == true && expanded[GroupKey(id, Pair("", ""))] == true,
+                                ) {
+                                    FailedUpdatesUiItem(
+                                        modifier = Modifier,
+                                        selected = item.selected,
+                                        onLongClick = {
+                                            onSelected(item, !item.selected, true, true)
+                                        },
+                                        onClick = {
+                                            when {
+                                                selectionMode -> onSelected(
+                                                    item,
+                                                    !item.selected,
+                                                    true,
+                                                    false,
+                                                )
+
+                                                else -> onMangaClick(item)
+                                            }
+                                        },
+                                        manga = item,
+                                    )
+                                }
+                            }
+                        }
                     }
                 }
-            }
-        }
-
-        itemsIndexed(items, key = { _, item -> item.libraryManga.manga.id }) { _, item ->
-            AnimatedVisibility(
-                modifier = Modifier.animateItemPlacement(),
-                visible = expanded[errorMessageHeaderId] == true && expanded[Pair(id, null)] == true,
-            ) {
-                FailedUpdatesUiItem(
-                    modifier = Modifier,
-                    selected = item.selected,
-                    onLongClick = {
-                        onSelected(item, !item.selected, true, true)
-                    },
-                    onClick = {
-                        when {
-                            selectionMode -> onSelected(item, !item.selected, true, false)
-                            else -> onMangaClick(item)
-                        }
-                    },
-                    manga = item,
-                    onMigrateManga = { onMigrateManga(item) }.takeIf { !selectionMode },
-                    padding = 34.dp,
-                )
             }
         }
     }
 }
 
 @Composable
-fun MigrateIndicator(
-    modifier: Modifier = Modifier,
+fun CustomIconButton(
     onClick: () -> Unit,
+    onLongClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    enabled: Boolean = true,
+    interactionSource: MutableInteractionSource = remember { MutableInteractionSource() },
+    content: @Composable () -> Unit,
 ) {
-    TextButton(
-        onClick = onClick,
-        modifier = modifier,
+    Box(
+        modifier = modifier
+            .minimumInteractiveComponentSize()
+            .size(40.dp)
+            .clip(CircleShape)
+            .combinedClickable(
+                onClick = onClick,
+                onLongClick = onLongClick,
+                enabled = enabled,
+                role = Role.Button,
+                interactionSource = interactionSource,
+                indication = rememberRipple(
+                    bounded = false,
+                    radius = 20.dp,
+                ),
+            ),
+        contentAlignment = Alignment.Center,
     ) {
-        Column(horizontalAlignment = Alignment.CenterHorizontally) {
-            Icon(
-                imageVector = Icons.Outlined.FlightTakeoff,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp),
-            )
-            Spacer(Modifier.height(3.3.dp))
-            Text(
-                text = stringResource(R.string.action_migrate),
-                fontSize = 12.sp,
-                textAlign = TextAlign.Center,
-            )
-        }
+        CompositionLocalProvider(content = content)
     }
 }
 
@@ -452,15 +471,22 @@ fun CategoryList(
     contentPadding: PaddingValues,
     selectionMode: Boolean,
     onMangaClick: (FailedUpdatesManga) -> Unit,
-    onMigrateManga: (FailedUpdatesManga) -> Unit,
     onGroupSelected: (List<FailedUpdatesManga>) -> Unit,
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
-    categoryMap: Map<String, Map<String?, List<FailedUpdatesManga>>>,
-    isSourceOrCategory: Int,
-    expanded: MutableMap<Pair<String, String?>, Boolean>,
+    categoryMap: Map<String, Map<Pair<String, String>, List<FailedUpdatesManga>>>,
+    expanded: MutableMap<GroupKey, Boolean>,
     sourcesCount: List<Pair<Source, Long>>,
+    onClickIcon: (String) -> Unit = {},
+    onLongClickIcon: (String) -> Unit = {},
+    lazyListState: LazyListState,
 ) {
-    FastScrollLazyColumn(contentPadding = contentPadding, modifier = Modifier.fillMaxHeight()) {
+    FastScrollLazyColumn(
+        contentPadding = contentPadding,
+        modifier = Modifier
+            .fillMaxHeight()
+            .padding(horizontal = 10.dp),
+        state = lazyListState,
+    ) {
         categoryMap.forEach { (category, errorMessageMap) ->
             failedUpdatesGroupUiItem(
                 id = category,
@@ -468,11 +494,11 @@ fun CategoryList(
                 selectionMode = selectionMode,
                 onMangaClick = onMangaClick,
                 onSelected = onSelected,
-                onMigrateManga = onMigrateManga,
                 onGroupSelected = onGroupSelected,
                 expanded = expanded,
-                isSourceOrCategory = isSourceOrCategory,
                 sourcesCount = sourcesCount,
+                onClickIcon = onClickIcon,
+                onLongClickIcon = onLongClickIcon,
             )
         }
     }

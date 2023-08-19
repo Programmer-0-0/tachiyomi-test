@@ -1,6 +1,8 @@
 package eu.kanade.tachiyomi.data.library
 
 import android.content.Context
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import androidx.work.BackoffPolicy
 import androidx.work.Constraints
 import androidx.work.CoroutineWorker
@@ -231,6 +233,11 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val restrictions = libraryPreferences.libraryUpdateMangaRestriction().get()
         val fetchWindow = setFetchInterval.getWindow(ZonedDateTime.now())
 
+        val connectivityManager = context.getSystemService(Context.CONNECTIVITY_SERVICE) as ConnectivityManager
+        val network = connectivityManager.activeNetwork
+        val capabilities = connectivityManager.getNetworkCapabilities(network)
+        val hasInternet = capabilities?.hasCapability(NetworkCapabilities.NET_CAPABILITY_INTERNET) ?: false
+
         coroutineScope {
             failedUpdatesManager.removeAllFailedUpdates()
             mangaToUpdate.groupBy { it.manga.source }.values
@@ -287,13 +294,14 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                                             } catch (e: Throwable) {
                                                 val errorMessage = when (e) {
                                                     is NoChaptersException -> context.getString(R.string.no_chapters_error)
-                                                    // failedUpdates will already have the source, don't need to copy it into the message
                                                     is SourceNotInstalledException -> context.getString(R.string.loader_not_implemented_error)
-                                                    else -> e.message ?: "Null"
+                                                    else -> e.message ?: context.getString(R.string.exception_unknown)
                                                 }
                                                 try {
                                                     failedUpdatesCount.getAndIncrement()
-                                                    failedUpdatesManager.insert(manga.id, errorMessage)
+                                                    val simplifiedErrorMessage = simplifyErrorMessage(e::class.java.simpleName, hasInternet)
+                                                    val fullErrorMessage = "${e::class.java.simpleName}: $errorMessage"
+                                                    failedUpdatesManager.insert(manga.id, fullErrorMessage, simplifiedErrorMessage)
                                                 } catch (e: Exception) {
                                                     logcat(LogPriority.ERROR, e)
                                                 }
@@ -337,6 +345,48 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
                     .joinToString()
             }
             notifier.showUpdateSkippedNotification(skippedUpdates.size)
+        }
+    }
+
+    private fun simplifyErrorMessage(exception: String, hasInternet: Boolean): String {
+        return when (exception) {
+            // General networking exceptions
+            "SocketException" -> context.getString(R.string.exception_socket_error)
+            "BindException" -> context.getString(R.string.exception_bind_port)
+            "InterruptedIOException" -> context.getString(R.string.exception_io_interrupted)
+            "HttpRetryException" -> context.getString(R.string.exception_http_retry)
+            "PortUnreachableException" -> context.getString(R.string.exception_port_unreachable)
+            // General IO-related exceptions
+            "IOException" -> if (hasInternet) context.getString(R.string.exception_io_error) else context.getString(R.string.exception_internet_connection)
+            "TimeoutException" -> context.getString(R.string.exception_timed_out)
+            // SSL & Security-related
+            "SSLException" -> context.getString(R.string.exception_ssl_connection)
+            "CertificateExpiredException" -> context.getString(R.string.exception_ssl_certificate)
+            "CertificateNotYetValidException" -> context.getString(R.string.exception_ssl_not_valid)
+            "CertificateParsingException" -> context.getString(R.string.exception_ssl_parsing)
+            "CertificateEncodingException" -> context.getString(R.string.exception_ssl_encoding)
+            "UnrecoverableKeyException" -> context.getString(R.string.exception_unrecoverable_key)
+            "KeyManagementException" -> context.getString(R.string.exception_key_management)
+            "NoSuchAlgorithmException" -> context.getString(R.string.exception_algorithm)
+            "KeyStoreException" -> context.getString(R.string.exception_keystore)
+            "NoSuchProviderException" -> context.getString(R.string.exception_security_provider)
+            "SignatureException" -> context.getString(R.string.exception_signature_validation)
+            "InvalidKeySpecException" -> context.getString(R.string.exception_key_specification)
+            // Host & DNS-related
+            "UnknownHostException" -> if (hasInternet) context.getString(R.string.exception_domain) else context.getString(R.string.exception_internet_connection)
+            "NoRouteToHostException" -> context.getString(R.string.exception_route_to_host)
+            // URL & URI related
+            "URISyntaxException" -> context.getString(R.string.exception_uri_syntax)
+            "MalformedURLException" -> context.getString(R.string.exception_malformed_url)
+            // Authentication & Proxy
+            "ProtocolException" -> context.getString(R.string.exception_protocol_proxy_type)
+            // Concurrency & Operation-related
+            "CancellationException" -> context.getString(R.string.exception_cancelled)
+            "InterruptedException" -> context.getString(R.string.exception_interrupted)
+            "IllegalStateException" -> context.getString(R.string.exception_unexpected_state)
+            "UnsupportedOperationException" -> context.getString(R.string.exception_not_supported)
+            "IllegalArgumentException" -> context.getString(R.string.exception_invalid_argument)
+            else -> ""
         }
     }
 

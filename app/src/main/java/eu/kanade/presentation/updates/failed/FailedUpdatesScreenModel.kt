@@ -2,13 +2,11 @@ package eu.kanade.presentation.updates.failed
 
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
-import androidx.compose.ui.res.stringResource
 import cafe.adriel.voyager.core.model.StateScreenModel
 import cafe.adriel.voyager.core.model.coroutineScope
 import eu.kanade.core.util.addOrRemove
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.source.interactor.GetSourcesWithFavoriteCount
-import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -54,8 +52,6 @@ class FailedUpdatesScreenModel(
     private val _channel = Channel<Event>(Int.MAX_VALUE)
     val channel = _channel.receiveAsFlow()
 
-//    private var failedUpdatesUI = emptyList<FailedUpdate>()
-
     init {
         coroutineScope.launchIO {
             val sortMode = preferenceStore.getEnum("sort_mode", SortingMode.BY_ALPHABET).get()
@@ -81,12 +77,13 @@ class FailedUpdatesScreenModel(
                                 failedUpdates.any { it.mangaId == libraryManga.manga.id }
                             }.map { libraryManga ->
                                 val source = sourceManager.get(libraryManga.manga.source)!!
-                                val errorMessage = failedUpdates.find {
-                                    it.mangaId == libraryManga.manga.id
-                                }?.errorMessage
+                                val failedUpdate = failedUpdates.find { it.mangaId == libraryManga.manga.id }!!
+                                val errorMessage = failedUpdate.errorMessage
+                                val simplifiedErrorMessage = failedUpdate.simplifiedErrorMessage
                                 FailedUpdatesManga(
                                     libraryManga = libraryManga,
                                     errorMessage = errorMessage,
+                                    simplifiedErrorMessage = simplifiedErrorMessage,
                                     selected = libraryManga.id in selectedMangaIds,
                                     source = source,
                                     category = categoriesMap[libraryManga.category]!!,
@@ -112,7 +109,6 @@ class FailedUpdatesScreenModel(
     fun runGroupBy(mode: GroupByMode) {
         when (mode) {
             GroupByMode.NONE -> unGroup()
-            GroupByMode.BY_CATEGORY -> groupByCategory()
             GroupByMode.BY_SOURCE -> groupBySource()
         }
     }
@@ -131,17 +127,15 @@ class FailedUpdatesScreenModel(
     }
 
     @Composable
-    fun categoryMap(items: List<FailedUpdatesManga>, groupMode: GroupByMode, sortMode: SortingMode, descendingOrder: Boolean): Map<String, Map<String?, List<FailedUpdatesManga>>> {
+    fun categoryMap(items: List<FailedUpdatesManga>, groupMode: GroupByMode, sortMode: SortingMode, descendingOrder: Boolean): Map<String, Map<Pair<String, String>, List<FailedUpdatesManga>>> {
         val unsortedMap = when (groupMode) {
-            GroupByMode.BY_CATEGORY -> items.groupBy { if (it.category.isSystemCategory) { stringResource(R.string.label_default) } else { it.category.name } }
-                .mapValues { entry -> entry.value.groupBy { it.errorMessage } }
             GroupByMode.BY_SOURCE -> items.groupBy { it.source.name }
-                .mapValues { entry -> entry.value.groupBy { it.errorMessage } }
+                .mapValues { entry -> entry.value.groupBy { Pair(it.errorMessage, it.simplifiedErrorMessage) } }
             GroupByMode.NONE -> emptyMap()
         }
         return when (sortMode) {
             SortingMode.BY_ALPHABET -> {
-                val sortedMap = TreeMap<String, Map<String?, List<FailedUpdatesManga>>>(if (descendingOrder) { compareByDescending { it } } else { compareBy { it } })
+                val sortedMap = TreeMap<String, Map<Pair<String, String>, List<FailedUpdatesManga>>>(if (descendingOrder) { compareByDescending { it } } else { compareBy { it } })
                 sortedMap.putAll(unsortedMap)
                 sortedMap
             }
@@ -155,15 +149,6 @@ class FailedUpdatesScreenModel(
             )
         }
         preferenceStore.getEnum("group_by_mode", GroupByMode.NONE).set(GroupByMode.BY_SOURCE)
-    }
-
-    private fun groupByCategory() {
-        mutableState.update {
-            it.copy(
-                groupByMode = GroupByMode.BY_CATEGORY,
-            )
-        }
-        preferenceStore.getEnum("group_by_mode", GroupByMode.NONE).set(GroupByMode.BY_CATEGORY)
     }
 
     private fun unGroup() {
@@ -307,18 +292,17 @@ class FailedUpdatesScreenModel(
                 items = state.items.filterNot { it.libraryManga.manga.id in set },
             )
         }
-//        failedUpdatesUI.filterNot { it.mangaId in set }
-//        if(failedUpdatesUI.isEmpty()){
-//            coroutineScope.launchIO {
-//                setWarningIconState(failedUpdatesManager)
-//            }
-//        }
+
         coroutineScope.launchNonCancellable { failedUpdatesManager.removeFailedUpdatesByMangaIds(listOfMangaIds) }
     }
 
     fun openDeleteMangaDialog(selected: List<FailedUpdatesManga>) {
         val mangaList = selected.map { it.libraryManga.manga }
         mutableState.update { it.copy(dialog = Dialog.DeleteManga(mangaList)) }
+    }
+
+    fun openErrorMessageDialog(errorMessage: String) {
+        mutableState.update { it.copy(dialog = Dialog.ShowErrorMessage(errorMessage)) }
     }
 
     fun closeDialog() {
@@ -353,7 +337,6 @@ class FailedUpdatesScreenModel(
 
 enum class GroupByMode {
     NONE,
-    BY_CATEGORY,
     BY_SOURCE,
 }
 
@@ -363,6 +346,8 @@ enum class SortingMode {
 
 sealed class Dialog {
     data class DeleteManga(val manga: List<Manga>) : Dialog()
+
+    data class ShowErrorMessage(val errorMessage: String) : Dialog()
 }
 
 sealed class Event {
@@ -372,7 +357,8 @@ sealed class Event {
 @Immutable
 data class FailedUpdatesManga(
     val libraryManga: LibraryManga,
-    val errorMessage: String?,
+    val errorMessage: String,
+    val simplifiedErrorMessage: String,
     val selected: Boolean = false,
     val source: eu.kanade.tachiyomi.source.Source,
     val category: Category,
@@ -391,3 +377,8 @@ data class FailedUpdatesScreenState(
     val selected = items.filter { it.selected }
     val selectionMode = selected.isNotEmpty()
 }
+
+data class GroupKey(
+    val categoryOrSource: String,
+    val errorMessagePair: Pair<String, String>,
+)

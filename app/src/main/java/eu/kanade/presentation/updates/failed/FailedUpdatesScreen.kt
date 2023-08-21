@@ -72,7 +72,7 @@ class FailedUpdatesScreen : Screen() {
         val context = LocalContext.current
         val uriHandler = LocalUriHandler.current
 
-        val screenModel = rememberScreenModel { FailedUpdatesScreenModel() }
+        val screenModel = rememberScreenModel { FailedUpdatesScreenModel(context) }
         val state by screenModel.state.collectAsState()
         val failedUpdatesListState = rememberLazyListState()
 

@@ -1,15 +1,15 @@
 CREATE TABLE failed_updates (
     manga_id INTEGER NOT NULL,
     error_message TEXT NOT NULL,
-    simplified_error_message TEXT NOT NULL,
+    is_online INTEGER NOT NULL CHECK(is_online IN (0, 1)),
     UNIQUE (manga_id) ON CONFLICT REPLACE,
     FOREIGN KEY(manga_id) REFERENCES mangas (_id)
     ON DELETE CASCADE
 );
 
 insert:
-INSERT INTO failed_updates(manga_id,error_message,simplified_error_message)
-VALUES (:mangaId,:errorMessage,:simplifiedErrorMessage);
+INSERT INTO failed_updates(manga_id,error_message,is_online)
+VALUES (:mangaId,:errorMessage,:isOnline);
 
 getFailedUpdates:
 SELECT *

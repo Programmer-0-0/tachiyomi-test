@@ -1,5 +1,6 @@
 package eu.kanade.presentation.updates.failed
 
+import android.content.Context
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.Immutable
 import cafe.adriel.voyager.core.model.StateScreenModel
@@ -7,6 +8,7 @@ import cafe.adriel.voyager.core.model.coroutineScope
 import eu.kanade.core.util.addOrRemove
 import eu.kanade.domain.manga.interactor.UpdateManga
 import eu.kanade.domain.source.interactor.GetSourcesWithFavoriteCount
+import eu.kanade.tachiyomi.R
 import eu.kanade.tachiyomi.data.cache.CoverCache
 import eu.kanade.tachiyomi.data.download.DownloadManager
 import eu.kanade.tachiyomi.source.online.HttpSource
@@ -37,6 +39,7 @@ import uy.kohesive.injekt.api.get
 import java.util.TreeMap
 
 class FailedUpdatesScreenModel(
+    private val context: Context,
     private val getLibraryManga: GetLibraryManga = Injekt.get(),
     private val sourceManager: SourceManager = Injekt.get(),
     private val downloadManager: DownloadManager = Injekt.get(),
@@ -79,7 +82,7 @@ class FailedUpdatesScreenModel(
                                 val source = sourceManager.get(libraryManga.manga.source)!!
                                 val failedUpdate = failedUpdates.find { it.mangaId == libraryManga.manga.id }!!
                                 val errorMessage = failedUpdate.errorMessage
-                                val simplifiedErrorMessage = failedUpdate.simplifiedErrorMessage
+                                val simplifiedErrorMessage = simplifyErrorMessage(errorMessage.substringBefore(":"), failedUpdate.isOnline)
                                 FailedUpdatesManga(
                                     libraryManga = libraryManga,
                                     errorMessage = errorMessage,
@@ -97,6 +100,48 @@ class FailedUpdatesScreenModel(
                     }
                 }
             runSortAction(sortMode)
+        }
+    }
+
+    private fun simplifyErrorMessage(exception: String, isOnline: Long): String {
+        return when (exception) {
+            // General networking exceptions
+            "SocketException" -> context.getString(R.string.exception_socket_error)
+            "BindException" -> context.getString(R.string.exception_bind_port)
+            "InterruptedIOException" -> context.getString(R.string.exception_io_interrupted)
+            "HttpRetryException" -> context.getString(R.string.exception_http_retry)
+            "PortUnreachableException" -> context.getString(R.string.exception_port_unreachable)
+            // General IO-related exceptions
+            "IOException" -> if (isOnline == 1L) context.getString(R.string.exception_io_error) else context.getString(R.string.exception_internet_connection)
+            "TimeoutException" -> context.getString(R.string.exception_timed_out)
+            // SSL & Security-related
+            "SSLException" -> context.getString(R.string.exception_ssl_connection)
+            "CertificateExpiredException" -> context.getString(R.string.exception_ssl_certificate)
+            "CertificateNotYetValidException" -> context.getString(R.string.exception_ssl_not_valid)
+            "CertificateParsingException" -> context.getString(R.string.exception_ssl_parsing)
+            "CertificateEncodingException" -> context.getString(R.string.exception_ssl_encoding)
+            "UnrecoverableKeyException" -> context.getString(R.string.exception_unrecoverable_key)
+            "KeyManagementException" -> context.getString(R.string.exception_key_management)
+            "NoSuchAlgorithmException" -> context.getString(R.string.exception_algorithm)
+            "KeyStoreException" -> context.getString(R.string.exception_keystore)
+            "NoSuchProviderException" -> context.getString(R.string.exception_security_provider)
+            "SignatureException" -> context.getString(R.string.exception_signature_validation)
+            "InvalidKeySpecException" -> context.getString(R.string.exception_key_specification)
+            // Host & DNS-related
+            "UnknownHostException" -> if (isOnline == 1L) context.getString(R.string.exception_domain) else context.getString(R.string.exception_internet_connection)
+            "NoRouteToHostException" -> context.getString(R.string.exception_route_to_host)
+            // URL & URI related
+            "URISyntaxException" -> context.getString(R.string.exception_uri_syntax)
+            "MalformedURLException" -> context.getString(R.string.exception_malformed_url)
+            // Authentication & Proxy
+            "ProtocolException" -> context.getString(R.string.exception_protocol_proxy_type)
+            // Concurrency & Operation-related
+            "CancellationException" -> context.getString(R.string.exception_cancelled)
+            "InterruptedException" -> context.getString(R.string.exception_interrupted)
+            "IllegalStateException" -> context.getString(R.string.exception_unexpected_state)
+            "UnsupportedOperationException" -> context.getString(R.string.exception_not_supported)
+            "IllegalArgumentException" -> context.getString(R.string.exception_invalid_argument)
+            else -> ""
         }
     }
 

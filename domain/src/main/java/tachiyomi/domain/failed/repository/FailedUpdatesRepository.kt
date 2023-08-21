@@ -12,5 +12,5 @@ interface FailedUpdatesRepository {
 
     suspend fun removeAllFailedUpdates()
 
-    suspend fun insert(mangaId: Long, errorMessage: String, simplifiedErrorMessage: String)
+    suspend fun insert(mangaId: Long, errorMessage: String, isOnline: Long)
 }

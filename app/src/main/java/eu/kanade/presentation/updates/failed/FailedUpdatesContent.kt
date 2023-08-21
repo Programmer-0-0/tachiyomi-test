@@ -139,7 +139,7 @@ private fun FailedUpdatesUiItem(
 
         Column(
             modifier = Modifier
-                .padding(start = MaterialTheme.padding.medium)
+                .padding(horizontal = MaterialTheme.padding.medium)
                 .weight(1f)
                 .animateContentSize(),
         ) {
@@ -235,7 +235,7 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                         )
                         .padding(
                             horizontal = 12.dp,
-                            vertical = MaterialTheme.padding.small,
+                            vertical = 12.dp,
                         ),
                     verticalAlignment = Alignment.CenterVertically,
                 ) {
@@ -284,13 +284,11 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                     }
                     val mangaCount = errorMessageMap.values.flatten().size
                     val sourceCount = sourcesCount.find { it.first.id == item.id }!!.second
-                    val pillAlpha = if (isSystemInDarkTheme()) 0.12f else 0.08f
                     Pill(
                         text = "$mangaCount/$sourceCount",
                         modifier = Modifier.padding(start = 4.dp),
-                        color = MaterialTheme.colorScheme.onBackground
-                            .copy(alpha = pillAlpha),
-                        fontSize = 14.sp,
+                        color = MaterialTheme.colorScheme.error,
+                        isCustomText = true,
                     )
                     val rotation by animateFloatAsState(
                         targetValue = if (expanded[GroupKey(id, Pair("", ""))] == true) 0f else -180f,
@@ -333,10 +331,8 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                                         { onGroupSelected(items) },
                                     )
                                     .padding(
-                                        start = 6.dp,
-                                        end = MaterialTheme.padding.small,
-                                        top = MaterialTheme.padding.small,
-                                        bottom = MaterialTheme.padding.small,
+                                        horizontal = 12.dp,
+                                        vertical = 12.dp,
                                     ),
                                 verticalAlignment = Alignment.CenterVertically,
                             ) {
@@ -362,13 +358,14 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                                 )
                                 Column(
                                     modifier = Modifier
+                                        .padding(horizontal = MaterialTheme.padding.medium)
                                         .weight(1f),
                                 ) {
                                     Text(
                                         errorMessagePair.second.ifEmpty {
                                             errorMessagePair.first.substringAfter(":").substring(1)
                                         },
-                                        maxLines = 1,
+                                        maxLines = 2,
                                         color = MaterialTheme.colorScheme.error,
                                         overflow = TextOverflow.Ellipsis,
                                         fontWeight = FontWeight.Medium,
@@ -388,7 +385,7 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                                             top = 8.dp,
                                             bottom = 8.dp,
                                             start = 10.dp,
-                                            end = 18.dp,
+                                            end = 14.1.dp,
                                         )
                                         .rotate(rotation),
                                 ) {
@@ -400,13 +397,15 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                             }
                         }
                         Column {
-                            items.forEachIndexed { _, item ->
+                            items.forEachIndexed { index, item ->
+                                val isLastItem = index == items.lastIndex
                                 AnimatedVisibility(
                                     modifier = Modifier,
                                     visible = expanded[errorMessageHeaderId] == true && expanded[GroupKey(id, Pair("", ""))] == true,
                                 ) {
                                     FailedUpdatesUiItem(
-                                        modifier = Modifier,
+                                        modifier = Modifier
+                                            .padding(bottom = if (isLastItem) 5.dp else 0.dp),
                                         selected = item.selected,
                                         onLongClick = {
                                             onSelected(item, !item.selected, true, true)

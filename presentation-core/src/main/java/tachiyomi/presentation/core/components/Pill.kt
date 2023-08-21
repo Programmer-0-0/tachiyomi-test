@@ -10,6 +10,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
@@ -22,6 +24,10 @@ fun Pill(
     contentColor: Color = MaterialTheme.colorScheme.onBackground,
     elevation: Dp = 1.dp,
     fontSize: TextUnit = LocalTextStyle.current.fontSize,
+    fontWeight: FontWeight = FontWeight.Medium,
+    style: TextStyle = MaterialTheme.typography.bodySmall,
+    textColor: Color = MaterialTheme.colorScheme.onError,
+    isCustomText: Boolean = false,
 ) {
     Surface(
         modifier = modifier
@@ -36,11 +42,22 @@ fun Pill(
                 .padding(6.dp, 1.dp),
             contentAlignment = Alignment.Center,
         ) {
-            Text(
-                text = text,
-                fontSize = fontSize,
-                maxLines = 1,
-            )
+            if (isCustomText) {
+                Text(
+                    text = text,
+                    fontSize = fontSize,
+                    style = style,
+                    fontWeight = fontWeight,
+                    color = textColor,
+                    maxLines = 1,
+                )
+            } else {
+                Text(
+                    text = text,
+                    fontSize = fontSize,
+                    maxLines = 1,
+                )
+            }
         }
     }
 }

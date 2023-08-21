@@ -30,8 +30,8 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.KeyboardArrowUp
 import androidx.compose.material.icons.rounded.Warning
 import androidx.compose.material.ripple.rememberRipple
-import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.LocalContentColor
@@ -190,7 +190,7 @@ fun LazyListScope.failedUpdatesGroupUiItem(
     item(
         key = errorMessageMap.values.flatten().find { it.source.name == id }!!.source.id,
     ) {
-        Card(
+        ElevatedCard(
             elevation = CardDefaults.cardElevation(
                 defaultElevation = 2.dp,
             ),

@@ -9,7 +9,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -191,15 +190,7 @@ fun LazyListScope.failedUpdatesGroupUiItem(
     item(
         key = errorMessageMap.values.flatten().find { it.source.name == id }!!.source.id,
     ) {
-        val cardColor = if (isSystemInDarkTheme()) {
-            Color(android.graphics.Color.parseColor("#313133"))
-        } else {
-            Color(android.graphics.Color.parseColor("#c5c5c5"))
-        }
         Card(
-            colors = CardDefaults.cardColors(
-                containerColor = cardColor,
-            ),
             elevation = CardDefaults.cardElevation(
                 defaultElevation = 2.dp,
             ),

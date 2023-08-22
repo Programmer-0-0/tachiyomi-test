@@ -22,13 +22,11 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBarScrollBehavior
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -76,18 +74,7 @@ class FailedUpdatesScreen : Screen() {
         val state by screenModel.state.collectAsState()
         val failedUpdatesListState = rememberLazyListState()
 
-        val categoryExpandedMapSaver: Saver<MutableMap<GroupKey, Boolean>, *> = Saver(
-            save = { map -> map.mapKeys { (key, _) -> key.categoryOrSource to key.errorMessagePair } },
-            restore = { map ->
-                val temp = mutableListOf<Pair<GroupKey, Boolean>>()
-                for ((key, value) in map) {
-                    temp.add(GroupKey(key.first, key.second) to value)
-                }
-                mutableStateMapOf(*temp.toTypedArray())
-            },
-        )
-
-        var expanded = emptyMap<GroupKey, Boolean>().toMutableMap()
+        val previousGroupByMode = remember { mutableStateOf(state.groupByMode) }
 
         Scaffold(
             topBar = { scrollBehavior ->
@@ -97,8 +84,9 @@ class FailedUpdatesScreen : Screen() {
                     selected = state.selected,
                     onSelectAll = { screenModel.toggleAllSelection(true) },
                     onDismissAll = { screenModel.dismissManga(state.items) },
-                    onExpandAll = { expanded.keys.forEach { expanded[it] = true } },
-                    onContractAll = { expanded.keys.forEach { expanded[it] = false } },
+                    isAllExpanded = state.expanded.values.all { it },
+                    onExpandAll = { screenModel.expandAll() },
+                    onContractAll = { screenModel.contractAll() },
                     onInvertSelection = { screenModel.invertSelection() },
                     onCancelActionMode = { screenModel.toggleAllSelection(false) },
                     scrollBehavior = scrollBehavior,
@@ -148,21 +136,23 @@ class FailedUpdatesScreen : Screen() {
 
                 else -> {
                     when (state.groupByMode) {
-                        GroupByMode.NONE -> FastScrollLazyColumn(
-                            contentPadding = contentPadding,
-                            state = failedUpdatesListState,
-                        ) {
-                            failedUpdatesUiItems(
-                                items = state.items,
-                                selectionMode = state.selectionMode,
-                                onClick = { item ->
-                                    navigator.push(
-                                        MangaScreen(item.libraryManga.manga.id),
-                                    )
-                                },
-                                onSelected = screenModel::toggleSelection,
-                                groupingMode = state.groupByMode,
-                            )
+                        GroupByMode.NONE -> {
+                            FastScrollLazyColumn(
+                                contentPadding = contentPadding,
+                                state = failedUpdatesListState,
+                            ) {
+                                failedUpdatesUiItems(
+                                    items = state.items,
+                                    selectionMode = state.selectionMode,
+                                    onClick = { item ->
+                                        navigator.push(
+                                            MangaScreen(item.libraryManga.manga.id),
+                                        )
+                                    },
+                                    onSelected = screenModel::toggleSelection,
+                                    groupingMode = state.groupByMode,
+                                )
+                            }
                         }
 
                         GroupByMode.BY_SOURCE -> {
@@ -172,22 +162,17 @@ class FailedUpdatesScreen : Screen() {
                                 state.sortMode,
                                 state.descendingOrder,
                             )
-                            expanded = rememberSaveable(
-                                saver = categoryExpandedMapSaver,
-                                key = "CategoryExpandedMap",
-                                init = {
-                                    mutableStateMapOf(
-                                        *categoryMap.keys.flatMap { source ->
-                                            listOf(GroupKey(source, Pair("", "")) to false)
-                                        }.toTypedArray(),
-                                        *categoryMap.flatMap { entry ->
-                                            entry.value.keys.map { errorMessage ->
-                                                GroupKey(entry.key, errorMessage) to false
-                                            }
-                                        }.toTypedArray(),
-                                    )
-                                },
-                            )
+
+                            LaunchedEffect(state.groupByMode) {
+                                val currentGroupByMode = state.groupByMode
+
+                                if (previousGroupByMode.value != currentGroupByMode) {
+                                    screenModel.initializeExpandedMap(categoryMap)
+                                }
+
+                                previousGroupByMode.value = currentGroupByMode
+                            }
+
                             CategoryList(
                                 contentPadding = contentPadding,
                                 selectionMode = state.selectionMode,
@@ -201,7 +186,8 @@ class FailedUpdatesScreen : Screen() {
                                     screenModel.toggleSelection(item, selected, userSelected, fromLongPress, true)
                                 },
                                 categoryMap = categoryMap,
-                                expanded = expanded,
+                                onExpandedMapChange = screenModel::updateExpandedMap,
+                                expanded = state.expanded,
                                 sourcesCount = state.sourcesCount,
                                 onClickIcon = { errorMessage ->
                                     screenModel.openErrorMessageDialog(errorMessage)
@@ -255,6 +241,7 @@ private fun FailedUpdatesAppBar(
     onClickSort: (SortingMode) -> Unit,
     onClickGroup: (GroupByMode) -> Unit,
     onDismissAll: () -> Unit,
+    isAllExpanded: Boolean,
     onExpandAll: () -> Unit,
     onContractAll: () -> Unit,
     scrollBehavior: TopAppBarScrollBehavior,
@@ -305,7 +292,6 @@ private fun FailedUpdatesAppBar(
                     var sortExpanded by remember { mutableStateOf(false) }
                     val onSortDismissRequest = { sortExpanded = false }
                     var mainExpanded by remember { mutableStateOf(false) }
-                    var expandAll by remember { mutableStateOf(false) }
                     val onDismissRequest = { mainExpanded = false }
                     SortDropdownMenu(
                         expanded = sortExpanded,
@@ -355,20 +341,18 @@ private fun FailedUpdatesAppBar(
                         onClick = onDismissAll,
                     )
                     if (groupByMode != GroupByMode.NONE) {
-                        if (expandAll) {
-                            actions += AppBar.OverflowAction(
+                        actions += if (isAllExpanded) {
+                            AppBar.OverflowAction(
                                 title = stringResource(R.string.action_contract_all),
                                 onClick = {
                                     onContractAll()
-                                    expandAll = false
                                 },
                             )
                         } else {
-                            actions += AppBar.OverflowAction(
+                            AppBar.OverflowAction(
                                 title = stringResource(R.string.action_expand_all),
                                 onClick = {
                                     onExpandAll()
-                                    expandAll = true
                                 },
                             )
                         }

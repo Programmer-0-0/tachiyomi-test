@@ -181,7 +181,8 @@ fun LazyListScope.failedUpdatesGroupUiItem(
     onMangaClick: (FailedUpdatesManga) -> Unit,
     id: String,
     onGroupSelected: (List<FailedUpdatesManga>) -> Unit,
-    expanded: MutableMap<GroupKey, Boolean>,
+    onExpandedMapChange: (GroupKey, Boolean) -> Unit,
+    expanded: Map<GroupKey, Boolean>,
     showLanguageInContent: Boolean = true,
     sourcesCount: List<Pair<Source, Long>>,
     onClickIcon: (String) -> Unit = {},
@@ -218,9 +219,9 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                             onClick = {
                                 val categoryKey = GroupKey(id, Pair("", ""))
                                 if (!expanded.containsKey(categoryKey)) {
-                                    expanded[categoryKey] = false
+                                    onExpandedMapChange(categoryKey, false)
                                 }
-                                expanded[categoryKey] = !expanded[categoryKey]!!
+                                onExpandedMapChange(categoryKey, !expanded[categoryKey]!!)
                             },
                             onLongClick = { onGroupSelected(errorMessageMap.values.flatten()) },
                         )
@@ -309,14 +310,11 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                                     .combinedClickable(
                                         onClick =
                                         {
-                                            expanded[errorMessageHeaderId] =
-                                                if (expanded[errorMessageHeaderId] ==
-                                                    null
-                                                ) {
-                                                    false
-                                                } else {
-                                                    !expanded[errorMessageHeaderId]!!
-                                                }
+                                            if (expanded[errorMessageHeaderId] == null) {
+                                                onExpandedMapChange(errorMessageHeaderId, false)
+                                            } else {
+                                                onExpandedMapChange(errorMessageHeaderId, !expanded[errorMessageHeaderId]!!)
+                                            }
                                         },
                                         onLongClick =
                                         { onGroupSelected(items) },
@@ -464,7 +462,8 @@ fun CategoryList(
     onGroupSelected: (List<FailedUpdatesManga>) -> Unit,
     onSelected: (FailedUpdatesManga, Boolean, Boolean, Boolean) -> Unit,
     categoryMap: Map<String, Map<Pair<String, String>, List<FailedUpdatesManga>>>,
-    expanded: MutableMap<GroupKey, Boolean>,
+    onExpandedMapChange: (GroupKey, Boolean) -> Unit,
+    expanded: Map<GroupKey, Boolean>,
     sourcesCount: List<Pair<Source, Long>>,
     onClickIcon: (String) -> Unit = {},
     onLongClickIcon: (String) -> Unit = {},
@@ -485,6 +484,7 @@ fun CategoryList(
                 onMangaClick = onMangaClick,
                 onSelected = onSelected,
                 onGroupSelected = onGroupSelected,
+                onExpandedMapChange = onExpandedMapChange,
                 expanded = expanded,
                 sourcesCount = sourcesCount,
                 onClickIcon = onClickIcon,

@@ -187,6 +187,36 @@ class FailedUpdatesScreenModel(
         }
     }
 
+    fun updateExpandedMap(key: GroupKey, value: Boolean) {
+        mutableState.update { it.copy(expanded = it.expanded + (key to value)) }
+    }
+
+    fun initializeExpandedMap(categoryMap: Map<String, Map<Pair<String, String>, List<FailedUpdatesManga>>>) {
+        mutableState.update { currentState ->
+            val newMap = mutableMapOf<GroupKey, Boolean>()
+            newMap.putAll(
+                categoryMap.keys.flatMap { source ->
+                    listOf(GroupKey(source, Pair("", "")) to false)
+                } + categoryMap.flatMap { entry ->
+                    entry.value.keys.map { errorMessage ->
+                        GroupKey(entry.key, errorMessage) to false
+                    }
+                },
+            )
+            currentState.copy(expanded = newMap)
+        }
+    }
+
+    fun expandAll() {
+        val newExpanded = mutableState.value.expanded.mapValues { true }
+        mutableState.update { it.copy(expanded = newExpanded) }
+    }
+
+    fun contractAll() {
+        val newExpanded = mutableState.value.expanded.mapValues { false }
+        mutableState.update { it.copy(expanded = newExpanded) }
+    }
+
     private fun groupBySource() {
         mutableState.update {
             it.copy(
@@ -418,6 +448,7 @@ data class FailedUpdatesScreenState(
     val descendingOrder: Boolean = false,
     val dialog: Dialog? = null,
     val sourcesCount: List<Pair<Source, Long>> = emptyList(),
+    val expanded: Map<GroupKey, Boolean> = emptyMap(),
 ) {
     val selected = items.filter { it.selected }
     val selectionMode = selected.isNotEmpty()

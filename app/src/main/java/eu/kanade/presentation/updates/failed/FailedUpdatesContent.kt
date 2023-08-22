@@ -219,7 +219,7 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                             onClick = {
                                 val categoryKey = GroupKey(id, Pair("", ""))
                                 if (!expanded.containsKey(categoryKey)) {
-                                    onExpandedMapChange(categoryKey, false)
+                                    onExpandedMapChange(categoryKey, true)
                                 }
                                 onExpandedMapChange(categoryKey, !expanded[categoryKey]!!)
                             },
@@ -311,7 +311,7 @@ fun LazyListScope.failedUpdatesGroupUiItem(
                                         onClick =
                                         {
                                             if (expanded[errorMessageHeaderId] == null) {
-                                                onExpandedMapChange(errorMessageHeaderId, false)
+                                                onExpandedMapChange(errorMessageHeaderId, true)
                                             } else {
                                                 onExpandedMapChange(errorMessageHeaderId, !expanded[errorMessageHeaderId]!!)
                                             }

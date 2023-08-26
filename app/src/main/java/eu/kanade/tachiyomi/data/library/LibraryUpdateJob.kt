@@ -228,7 +228,7 @@ class LibraryUpdateJob(private val context: Context, workerParams: WorkerParamet
         val skippedUpdates = CopyOnWriteArrayList<Pair<Manga, String?>>()
         val hasDownloads = AtomicBoolean(false)
         val failedUpdatesCount = AtomicInteger(0)
-        val restrictions = libraryPreferences.libraryUpdateMangaRestriction().get()
+        val restrictions = libraryPreferences.autoUpdateMangaRestrictions().get()
         val fetchWindow = setFetchInterval.getWindow(ZonedDateTime.now())
 
         coroutineScope {

@@ -27,7 +27,44 @@ val Throwable.formattedMessage: String
             is LicensedMangaChaptersException -> return getString(R.string.licensed_manga_chapters_error)
         }
         return when (val className = this::class.simpleName) {
-            "Exception", "IOException" -> message ?: className
+            "Exception" -> message ?: className
+            // General networking exceptions
+            "SocketException" -> getString(R.string.exception_socket_error)
+            "ConnectException" -> getString(R.string.exception_connect)
+            "BindException" -> getString(R.string.exception_bind_port)
+            "InterruptedIOException" -> getString(R.string.exception_io_interrupted)
+            "HttpRetryException" -> getString(R.string.exception_http_retry)
+            "PortUnreachableException" -> getString(R.string.exception_port_unreachable)
+            // General IO-related exceptions
+            "IOException" -> if (isOnline()) getString(R.string.exception_io_error) else getString(R.string.exception_offline)
+            "TimeoutException" -> getString(R.string.exception_timed_out)
+            // SSL & Security-related
+            "SSLException" -> getString(R.string.exception_ssl_connection)
+            "CertificateExpiredException" -> getString(R.string.exception_ssl_certificate)
+            "CertificateNotYetValidException" -> getString(R.string.exception_ssl_not_valid)
+            "CertificateParsingException" -> getString(R.string.exception_ssl_parsing)
+            "CertificateEncodingException" -> getString(R.string.exception_ssl_encoding)
+            "UnrecoverableKeyException" -> getString(R.string.exception_unrecoverable_key)
+            "KeyManagementException" -> getString(R.string.exception_key_management)
+            "NoSuchAlgorithmException" -> getString(R.string.exception_algorithm)
+            "KeyStoreException" -> getString(R.string.exception_keystore)
+            "NoSuchProviderException" -> getString(R.string.exception_security_provider)
+            "SignatureException" -> getString(R.string.exception_signature_validation)
+            "InvalidKeySpecException" -> getString(R.string.exception_key_specification)
+            // Host & DNS-related
+            "NoRouteToHostException" -> getString(R.string.exception_route_to_host)
+            // URL & URI related
+            "URISyntaxException" -> getString(R.string.exception_uri_syntax)
+            "MalformedURLException" -> getString(R.string.exception_malformed_url)
+            // Authentication & Proxy
+            "ProtocolException" -> getString(R.string.exception_protocol_proxy_type)
+            // Concurrency & Operation-related
+            "CancellationException" -> getString(R.string.exception_cancelled)
+            "InterruptedException" -> getString(R.string.exception_interrupted)
+            "IllegalStateException" -> getString(R.string.exception_unexpected_state)
+            "UnsupportedOperationException" -> getString(R.string.exception_not_supported)
+            "IllegalArgumentException" -> getString(R.string.exception_invalid_argument)
+
             else -> "$className: $message"
         }
     }

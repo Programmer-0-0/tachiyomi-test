@@ -949,6 +949,35 @@
     <!-- Common exceptions -->
     <!-- Do not translate "WebView" -->
     <string name="exception_http">HTTP %d, check website in WebView</string>
-    <string name="exception_offline">No Internet connection</string>
+    <string name="exception_offline">No internet connection</string>
     <string name="exception_unknown_host">Couldn\'t reach %s</string>
+    <string name="exception_socket_error">Socket error</string>
+    <string name="exception_connect">Failed to connect to host</string>
+    <string name="exception_bind_port">Failed to bind to the port</string>
+    <string name="exception_io_interrupted">IO operation interrupted</string>
+    <string name="exception_http_retry">HTTP operation needs to retry</string>
+    <string name="exception_port_unreachable">Port unreachable</string>
+    <string name="exception_io_error">IO error occurred</string>
+    <string name="exception_timed_out">Operation timed out</string>
+    <string name="exception_ssl_connection">SSL connection error</string>
+    <string name="exception_ssl_certificate">SSL certificate expired</string>
+    <string name="exception_ssl_not_valid">SSL certificate not yet valid</string>
+    <string name="exception_ssl_parsing">Error parsing SSL certificate</string>
+    <string name="exception_ssl_encoding">Error encoding SSL certificate</string>
+    <string name="exception_unrecoverable_key">Unrecoverable key encountered</string>
+    <string name="exception_key_management">Issue with key management</string>
+    <string name="exception_algorithm">Algorithm not available</string>
+    <string name="exception_keystore">Keystore error</string>
+    <string name="exception_security_provider">Security provider not found</string>
+    <string name="exception_signature_validation">Issue with signature validation</string>
+    <string name="exception_key_specification">Invalid key specification</string>
+    <string name="exception_route_to_host">No route to host</string>
+    <string name="exception_uri_syntax">Invalid URI syntax</string>
+    <string name="exception_malformed_url">Malformed URL</string>
+    <string name="exception_protocol_proxy_type">Invalid protocol or proxy type</string>
+    <string name="exception_cancelled">Operation was cancelled</string>
+    <string name="exception_interrupted">Operation was interrupted</string>
+    <string name="exception_unexpected_state">Unexpected state encountered</string>
+    <string name="exception_not_supported">Operation not supported</string>
+    <string name="exception_invalid_argument">Invalid argument provided</string>
 </resources>
